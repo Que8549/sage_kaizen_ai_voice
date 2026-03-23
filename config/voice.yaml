@@ -1,0 +1,59 @@
+# config/voice.yaml — Voice pipeline configuration
+# All ZeroMQ addresses and persona defaults
+
+zmq:
+  # Main Sage Kaizen app BINDS these; this service CONNECTS
+  transcript_bus: "tcp://127.0.0.1:5790"  # STT → Main  (PUSH/PULL)
+  token_bus:      "tcp://127.0.0.1:5791"  # Main → TTS  (PUB/SUB)
+  interrupt_bus:  "tcp://127.0.0.1:5792"  # TTS → Main  (PUSH/PULL)
+  # Pi agents use 5800-5810 — no conflict
+
+tts:
+  default_voice: "am_fenrir"     # primary narrator voice
+  default_speed: 0.87            # unhurried, storyteller pacing
+  default_lang:  "en-us"
+  sample_rate:   24000           # Kokoro output sample rate
+
+personas:
+  narrator:
+    voice: "am_fenrir"
+    speed: 0.87
+    description: "Deep, warm, authoritative — long-form narration"
+  mentor:
+    voice: "am_fenrir"
+    speed: 0.92
+    description: "Confident guide — 6th-9th grade, research, code"
+  teacher:
+    voice: "am_michael"
+    speed: 0.95
+    description: "Warm, clear — K-5 tutoring, step-by-step"
+  chat:
+    voice: "am_fenrir"
+    speed: 1.00
+    description: "Relaxed conversational"
+  quick:
+    voice: "am_onyx"
+    speed: 1.05
+    description: "Crisp — device control, status ACKs"
+
+intent_routing:
+  creative:       narrator
+  philosophy:     narrator
+  astronomy:      narrator
+  research:       narrator
+  long_form:      narrator
+  storytelling:   narrator
+  architecture:   mentor
+  code:           mentor
+  tutor_6:        mentor
+  tutor_9:        mentor
+  tutor_1:        teacher
+  tutor_5:        teacher
+  explain_simple: teacher
+  chat:           chat
+  general:        chat
+  question:       chat
+  device_control: quick
+  led_control:    quick
+  status:         quick
+  system:         quick

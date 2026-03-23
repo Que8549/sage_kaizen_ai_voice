@@ -1,0 +1,65 @@
+# sage_kaizen_ai_voice/requirements.txt
+# Python 3.11.x venv — single: pip install -r requirements.txt
+#
+# ─────────────────────────────────────────────────────────────
+# STT — faster-whisper + distil-large-v3
+# ─────────────────────────────────────────────────────────────
+faster-whisper>=1.2.1       # CTranslate2 Whisper inference
+                            # ctranslate2 has NO wheels for Python 3.13+
+
+# ─────────────────────────────────────────────────────────────
+# TTS — Kokoro-82M via raw onnxruntime + misaki G2P
+#
+# Uses onnx-community/Kokoro-82M-ONNX (downloaded to E:\)
+# NO kokoro-onnx pip package needed.
+# ─────────────────────────────────────────────────────────────
+onnxruntime>=1.20.0         # ONNX Runtime CPU inference engine
+misaki[en]>=0.9.4           # G2P: grapheme-to-phoneme (text → IPA)
+                            # hexgrad/misaki — the official Kokoro tokeniser
+phonemizer-fork             # espeak-ng Python bindings (misaki fallback for OOV)
+
+# ─────────────────────────────────────────────────────────────
+# Audio I/O
+# ─────────────────────────────────────────────────────────────
+sounddevice>=0.5.0          # Audio playback via PortAudio
+soundfile>=0.12.1           # WAV file read/write
+PyAudio>=0.2.14             # Microphone capture
+numpy>=1.26.0,<3.0.0        # Audio array processing
+
+# ─────────────────────────────────────────────────────────────
+# Messaging & service infrastructure
+# ─────────────────────────────────────────────────────────────
+pyzmq>=25.1.0               # ZeroMQ message passing
+PyYAML>=6.0.0               # Config file parsing
+httpx>=0.27.0               # Health check HTTP client
+
+# ─────────────────────────────────────────────────────────────
+# SYSTEM PREREQUISITES (not pip packages)
+# ─────────────────────────────────────────────────────────────
+#
+# 1. espeak-ng (required by misaki for out-of-vocabulary words):
+#    Download MSI: https://github.com/espeak-ng/espeak-ng/releases
+#    Install to default: C:\Program Files\eSpeak NG\
+#    Add to Windows PATH
+#    Verify: espeak-ng --version
+#
+# 2. PyAudio on Windows (if pip install PyAudio fails):
+#    pip install pipwin && pipwin install pyaudio
+#
+# ─────────────────────────────────────────────────────────────
+# TTS MODEL FILES (pre-installed on E:\, DO NOT download at runtime)
+# ─────────────────────────────────────────────────────────────
+#
+# Source: onnx-community/Kokoro-82M-ONNX (HuggingFace)
+# Download the entire repo to E:\Kokoro-82M-ONNX\
+# The folder structure must be:
+#
+#   E:\Kokoro-82M-ONNX\
+#     onnx\
+#       model_q8.onnx      ← 88 MB — recommended
+#       model.onnx         ← 310 MB — optional, higher quality
+#     voices\
+#       am_fenrir.bin      ← narrator voice  (required)
+#       am_michael.bin     ← teacher voice   (required)
+#       am_onyx.bin        ← quick voice     (required)
+#       (+ all other .bin files from the voices/ folder)

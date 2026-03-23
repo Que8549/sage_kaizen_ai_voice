@@ -1,0 +1,48 @@
+# config/paths.yaml — Model file paths (all on E:\ drive)
+# Read by src/config.py — do not hardcode paths elsewhere.
+
+models:
+  stt:
+    # faster-whisper distil-large-v3, INT8 quantised, CPU only
+    # Source: Systran/faster-distil-whisper-large-v3 (HuggingFace)
+    model_dir:    "E:\\distil-large-v3-ct2"
+    device:       "cpu"
+    compute_type: "int8"
+
+  tts:
+    # Kokoro-82M ONNX — raw onnxruntime inference (no kokoro-onnx pip package)
+    # Source: onnx-community/Kokoro-82M-ONNX (HuggingFace)
+    #
+    # Downloaded folder layout:
+    #   E:\Kokoro-82M-ONNX\
+    #     onnx\
+    #       model_q8.onnx       ← RECOMMENDED: INT8, 88 MB, fast on CPU
+    #       model.onnx          ← fp32, 310 MB, marginally better quality
+    #       model_fp16.onnx     ← fp16, 169 MB
+    #       model_q4.onnx       ← Q4, smallest but reduced quality
+    #     voices\
+    #       am_fenrir.bin       ← narrator (Morgan Freeman style)
+    #       am_michael.bin      ← teacher (warm, clear)
+    #       am_onyx.bin         ← quick/device control (crisp)
+    #       af_heart.bin        ← (and all other voices from the repo)
+    #       ... (54+ voice .bin files total)
+
+    onnx_model:  "E:\\Kokoro-82M-ONNX\\onnx\\model_q8f16.onnx"
+    voices_dir:  "E:\\Kokoro-82M-ONNX\\voices"
+
+    # To use fp32 instead of INT8 (marginally better quality, 3.5x larger):
+    # onnx_model:  "E:\\Kokoro-82M-ONNX\\onnx\\model.onnx"
+
+    # Voices used by Sage Kaizen personas:
+    #   am_fenrir   → narrator, mentor, chat     (deep, resonant American male)
+    #   am_michael  → teacher                    (warm, clear American male)
+    #   am_onyx     → quick/device control       (crisp American male)
+
+logs:
+  dir:  "logs"
+  stt:  "logs/stt_service.log"
+  tts:  "logs/tts_service.log"
+  main: "logs/voice_pipeline.log"
+
+output:
+  dir: "output"
