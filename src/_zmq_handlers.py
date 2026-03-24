@@ -31,20 +31,20 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import re
 import uuid
 from typing import Optional
 
 import numpy as np
 
+from sk_logging import get_logger
 from src.stt.audio_capture import AudioCapture
 from src.stt.transcriber import Transcriber
 from src.tts.player import AudioPlayer
 from src.tts.synthesizer import KokoroSynthesizer
 from src.config import TTS
 
-log = logging.getLogger(__name__)
+_LOG = get_logger("sage_kaizen.voice.zmq")
 
 _SENTENCE_END_RE = re.compile(r"[.!?](\s|$)")
 
@@ -81,7 +81,7 @@ async def run_stt_pusher(
 ) -> None:
     """Capture audio, transcribe, push transcripts to main app."""
     loop = asyncio.get_running_loop()
-    log.info("STT pusher running")
+    _LOG.info("STT pusher running")
     while True:
         audio = await loop.run_in_executor(
             None, lambda: capture.get_utterance(timeout=0.5)
@@ -97,7 +97,7 @@ async def run_stt_pusher(
             "session_id": str(uuid.uuid4()),
         }
         await push_socket.send(json.dumps(msg).encode())
-        log.info("Transcript sent: %r", text[:60])
+        _LOG.info("Transcript sent: %r", text[:60])
 
 
 async def run_tts_subscriber(
@@ -114,14 +114,14 @@ async def run_tts_subscriber(
     buf     = _SentenceBuffer()
     loop    = asyncio.get_running_loop()
 
-    log.info("TTS subscriber running")
+    _LOG.info("TTS subscriber running")
 
     while True:
         try:
             raw = await sub_socket.recv()
             msg = json.loads(raw)
         except Exception:
-            log.exception("ZMQ receive error")
+            _LOG.exception("ZMQ receive error")
             continue
 
         mtype = msg.get("type")
@@ -131,7 +131,7 @@ async def run_tts_subscriber(
             new_sid = msg["session_id"]
 
             if old_sid and old_sid != new_sid:
-                log.info("Barge-in: old=%s new=%s", old_sid[:8], new_sid[:8])
+                _LOG.info("Barge-in: old=%s new=%s", old_sid[:8], new_sid[:8])
                 player.interrupt()
                 await interrupt_push.send(json.dumps({
                     "type":       "interrupt",
@@ -179,4 +179,4 @@ async def _synth_and_enqueue(
         )
         player.enqueue(np.array(samples, dtype=np.float32), int(sr))
     except Exception:
-        log.exception("Synthesis error: %r", text[:50])
+        _LOG.exception("Synthesis error: %r", text[:50])

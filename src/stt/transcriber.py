@@ -15,14 +15,13 @@ Model: distil-large-v3
   - MUST use beam_size=1 (model is optimized for this)
 
 Verified API (faster-whisper 1.2.1, March 2026):
-  WhisperModel(model_size_or_path, device, compute_type)
+  WhisperModel(model_size_or_path, device, compute_type, cpu_threads, num_workers)
   model.transcribe(audio, beam_size, language, condition_on_previous_text, vad_filter)
 """
 
 from __future__ import annotations
 
 import asyncio
-import logging
 import threading
 from pathlib import Path
 from typing import Optional
@@ -30,9 +29,10 @@ from typing import Optional
 import numpy as np
 from faster_whisper import WhisperModel
 
+from sk_logging import get_logger
 from src.config import PATHS, STT
 
-log = logging.getLogger(__name__)
+_LOG = get_logger("sage_kaizen.voice.stt.transcriber")
 
 
 class Transcriber:
@@ -76,8 +76,8 @@ class Transcriber:
                 f"Run scripts/verify_setup.py for diagnostics."
             )
 
-        log.info("Loading STT model from %s ...", model_dir)
-        log.info("  device=%s  compute_type=%s", STT.DEVICE, STT.COMPUTE_TYPE)
+        _LOG.info("Loading STT model from %s ...", model_dir)
+        _LOG.info("  device=%s  compute_type=%s", STT.DEVICE, STT.COMPUTE_TYPE)
 
         with self._lock:
             if not self._ready:  # double-checked locking
@@ -85,10 +85,12 @@ class Transcriber:
                     model_size_or_path=str(model_dir),
                     device=STT.DEVICE,
                     compute_type=STT.COMPUTE_TYPE,
+                    cpu_threads=STT.CPU_THREADS,
+                    num_workers=STT.INTER_THREADS,
                 )
                 self._ready = True
 
-        log.info("STT model ready — distil-large-v3 INT8 CPU")
+        _LOG.info("STT model ready — distil-large-v3 INT8 CPU")
 
     @property
     def is_ready(self) -> bool:
@@ -127,9 +129,9 @@ class Transcriber:
             text = " ".join(seg.text for seg in segments).strip()
 
         if text:
-            log.info("Transcribed: %r  (lang=%s)", text[:80], info.language)
+            _LOG.info("Transcribed: %r  (lang=%s)", text[:80], info.language)
         else:
-            log.debug("No speech detected in utterance")
+            _LOG.debug("No speech detected in utterance")
 
         return text
 
@@ -167,5 +169,5 @@ class Transcriber:
             )
             text = " ".join(seg.text for seg in segments).strip()
 
-        log.info("File transcription: %r", text[:80])
+        _LOG.info("File transcription: %r", text[:80])
         return text

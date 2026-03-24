@@ -30,9 +30,9 @@ Integrated:
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Callable, Optional
 
+from sk_logging import get_logger
 from src.config import ZMQ
 from src.stt.audio_capture import AudioCapture
 from src.stt.transcriber import Transcriber
@@ -40,7 +40,7 @@ from src.tts.expression_engine import resolve_and_preprocess
 from src.tts.player import AudioPlayer
 from src.tts.synthesizer import KokoroSynthesizer
 
-log = logging.getLogger(__name__)
+_LOG = get_logger("sage_kaizen.voice.pipeline")
 
 
 class VoicePipeline:
@@ -87,7 +87,7 @@ class VoicePipeline:
 
     async def initialize(self) -> None:
         """Load models and start audio player."""
-        log.info("Initializing voice pipeline (mode=%s)...", self._mode)
+        _LOG.info("Initializing voice pipeline (mode=%s)...", self._mode)
         loop = asyncio.get_running_loop()
 
         # Load models in parallel
@@ -97,7 +97,7 @@ class VoicePipeline:
         )
 
         await self._player.start()
-        log.info("Voice pipeline initialized")
+        _LOG.info("Voice pipeline initialized")
 
     # ─────────────────────────────────────────────────────────
     # Standalone mode
@@ -109,19 +109,19 @@ class VoicePipeline:
         Microphone → transcribe → speak response.
         Press Ctrl+C to stop.
         """
-        await self.initialize()
-        self._running = True
-
-        # Announce readiness
-        await self.speak_text(
-            "Sage Kaizen voice pipeline is ready. I'm listening.",
-            intent="chat",
-        )
-
-        self._capture.start()
-        log.info("Listening... (Ctrl+C to stop)")
-
         try:
+            await self.initialize()
+            self._running = True
+
+            # Announce readiness
+            await self.speak_text(
+                "Sage Kaizen voice pipeline is ready. I'm listening.",
+                intent="chat",
+            )
+
+            self._capture.start()
+            _LOG.info("Listening... (Ctrl+C to stop)")
+
             while self._running:
                 # Block until an utterance arrives (30ms poll interval)
                 audio = await asyncio.get_running_loop().run_in_executor(
@@ -135,7 +135,7 @@ class VoicePipeline:
                 if not text:
                     continue
 
-                log.info("You said: %r", text)
+                _LOG.info("You said: %r", text)
 
                 # Route to callback or direct TTS
                 if self._on_transcript:
@@ -145,9 +145,9 @@ class VoicePipeline:
                     await self.speak_text(text, intent=self._default_intent)
 
         except asyncio.CancelledError:
-            log.info("Pipeline cancelled")
+            _LOG.info("Pipeline cancelled")
         except KeyboardInterrupt:
-            log.info("Pipeline stopped by user")
+            _LOG.info("Pipeline stopped by user")
         finally:
             await self.shutdown()
 
@@ -174,34 +174,38 @@ class VoicePipeline:
                 "Run: pip install pyzmq"
             )
 
-        await self.initialize()
-        self._running = True
-
-        ctx = zmq.asyncio.Context.instance()
-
-        # STT output socket — PUSH to main app
-        transcript_push = ctx.socket(zmq.PUSH)
-        transcript_push.connect(ZMQ.TRANSCRIPT_BUS)
-        log.info("STT transcript bus connected: %s", ZMQ.TRANSCRIPT_BUS)
-
-        # TTS input socket — SUB to receive token stream from main app
-        token_sub = ctx.socket(zmq.SUB)
-        token_sub.connect(ZMQ.TOKEN_BUS)
-        token_sub.setsockopt(zmq.SUBSCRIBE, b"")
-        log.info("TTS token bus connected: %s", ZMQ.TOKEN_BUS)
-
-        # Barge-in output socket — PUSH interrupt signals to main app
-        interrupt_push = ctx.socket(zmq.PUSH)
-        interrupt_push.connect(ZMQ.INTERRUPT_BUS)
-        log.info("Interrupt bus connected: %s", ZMQ.INTERRUPT_BUS)
-
-        self._capture.start()
-        log.info("Integrated voice pipeline running")
-
-        # Import here to avoid circular import issues in standalone mode
-        from src._zmq_handlers import run_stt_pusher, run_tts_subscriber
-
+        transcript_push = None
+        token_sub = None
+        interrupt_push = None
+        ctx = None
         try:
+            await self.initialize()
+            self._running = True
+
+            ctx = zmq.asyncio.Context.instance()
+
+            # STT output socket — PUSH to main app
+            transcript_push = ctx.socket(zmq.PUSH)
+            transcript_push.connect(ZMQ.TRANSCRIPT_BUS)
+            _LOG.info("STT transcript bus connected: %s", ZMQ.TRANSCRIPT_BUS)
+
+            # TTS input socket — SUB to receive token stream from main app
+            token_sub = ctx.socket(zmq.SUB)
+            token_sub.connect(ZMQ.TOKEN_BUS)
+            token_sub.setsockopt(zmq.SUBSCRIBE, b"")
+            _LOG.info("TTS token bus connected: %s", ZMQ.TOKEN_BUS)
+
+            # Barge-in output socket — PUSH interrupt signals to main app
+            interrupt_push = ctx.socket(zmq.PUSH)
+            interrupt_push.connect(ZMQ.INTERRUPT_BUS)
+            _LOG.info("Interrupt bus connected: %s", ZMQ.INTERRUPT_BUS)
+
+            self._capture.start()
+            _LOG.info("Integrated voice pipeline running")
+
+            # Import here to avoid circular import issues in standalone mode
+            from src._zmq_handlers import run_stt_pusher, run_tts_subscriber
+
             await asyncio.gather(
                 run_stt_pusher(
                     self._capture, self._transcriber, transcript_push
@@ -211,12 +215,16 @@ class VoicePipeline:
                 ),
             )
         except asyncio.CancelledError:
-            log.info("Integrated pipeline cancelled")
+            _LOG.info("Integrated pipeline cancelled")
         finally:
-            transcript_push.close()
-            token_sub.close()
-            interrupt_push.close()
-            ctx.term()
+            if transcript_push:
+                transcript_push.close()
+            if token_sub:
+                token_sub.close()
+            if interrupt_push:
+                interrupt_push.close()
+            if ctx:
+                ctx.term()
             await self.shutdown()
 
     # ─────────────────────────────────────────────────────────
@@ -241,7 +249,7 @@ class VoicePipeline:
             grade_level=grade_level,
             override_persona=self._persona_override,
         )
-        log.debug("Speaking [%s] speed=%.2f: %r",
+        _LOG.debug("Speaking [%s] speed=%.2f: %r",
                   params.persona.value, params.speed, processed[:60])
 
         async for samples, sr in self._synthesizer.stream_async(
@@ -258,4 +266,4 @@ class VoicePipeline:
         self._running = False
         self._capture.stop()
         await self._player.stop()
-        log.info("Voice pipeline shut down")
+        _LOG.info("Voice pipeline shut down")

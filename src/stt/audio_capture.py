@@ -20,7 +20,6 @@ Threading model:
 from __future__ import annotations
 
 import audioop
-import logging
 import queue
 import struct
 import threading
@@ -29,9 +28,10 @@ from typing import Callable, Optional
 import numpy as np
 import pyaudio
 
+from sk_logging import get_logger
 from src.config import STT
 
-log = logging.getLogger(__name__)
+_LOG = get_logger("sage_kaizen.voice.stt.capture")
 
 
 class AudioCapture:
@@ -85,7 +85,7 @@ class AudioCapture:
             daemon=True,
         )
         self._thread.start()
-        log.info(
+        _LOG.info(
             "AudioCapture started — device=%s sample_rate=%d chunk=%dms",
             self._device or "default",
             STT.SAMPLE_RATE,
@@ -102,7 +102,7 @@ class AudioCapture:
             self._stream.close()
         if self._pa:
             self._pa.terminate()
-        log.info("AudioCapture stopped")
+        _LOG.info("AudioCapture stopped")
 
     def get_utterance(self, timeout: float = 0.5) -> Optional[np.ndarray]:
         """
@@ -146,7 +146,7 @@ class AudioCapture:
                     exception_on_overflow=False,
                 )
             except OSError as e:
-                log.warning("PyAudio read error: %s", e)
+                _LOG.warning("PyAudio read error: %s", e)
                 continue
 
             # Fast energy gate: audioop.rms on int16 data
@@ -170,7 +170,7 @@ class AudioCapture:
                         silent_count  = 0
                         in_speech     = False
 
-        log.debug("AudioCapture loop exited")
+        _LOG.debug("AudioCapture loop exited")
 
     # ─────────────────────────────────────────────────────────
     # Helpers
@@ -192,6 +192,6 @@ class AudioCapture:
             try:
                 self._callback(audio)
             except Exception:
-                log.exception("on_utterance callback raised")
+                _LOG.exception("on_utterance callback raised")
         else:
             self._queue.put_nowait(audio)

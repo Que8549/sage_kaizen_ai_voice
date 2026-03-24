@@ -7,14 +7,23 @@ INVARIANT: All paths are resolved via Path(...).resolve() before use.
 INVARIANT: No model downloads at runtime — all files must pre-exist on E:\\.
 INVARIANT: Never hardcode paths inline in other modules — always import from here.
 
-TTS model source: onnx-community/Kokoro-82M-ONNX (HuggingFace)
+TTS model source: onnx-community/Kokoro-82M-v1.0-ONNX (HuggingFace)
   Downloaded folder structure:
-    E:\\Kokoro-82M-ONNX\\onnx\\model_q8f16.onnx     ← ONNX model (INT8, 88 MB)
-    E:\\Kokoro-82M-ONNX\\onnx\\onnx\\model.onnx         ← ONNX model (fp32, 310 MB)
-    E:\\Kokoro-82M-ONNX\\voices\\am_fenrir.bin    ← narrator voice
-    E:\\Kokoro-82M-ONNX\\\\voices\\am_michael.bin   ← teacher voice
-    E:\\Kokoro-82M-ONNX\\\\voices\\am_onyx.bin      ← quick/device voice
-    (+ all other voice .bin files from the voices/ folder)
+    E:\\Kokoro-82M-v1.0-ONNX\\onnx\\model_quantized.onnx ← DEFAULT (89 MB, pure INT8, CPU-safe)
+    E:\\Kokoro-82M-v1.0-ONNX\\onnx\\model.onnx           ← fp32 (326 MB)
+    E:\\Kokoro-82M-v1.0-ONNX\\voices\\am_fenrir.bin      ← narrator/mentor/chat voice
+    E:\\Kokoro-82M-v1.0-ONNX\\voices\\am_michael.bin     ← teacher voice
+    E:\\Kokoro-82M-v1.0-ONNX\\voices\\am_onyx.bin        ← quick/device voice
+    (+ 50+ additional voices from the full v1.0 pack)
+
+Quantization options (v1.0):
+    model_quantized.onnx  89 MB  Pure INT8                  ← DEFAULT (CPU-safe)
+    model_q8f16.onnx      83 MB  INT8+fp16 — CRASHES on CPU (CPUExecutionProvider unsupported)
+    model_uint8f16.onnx  109 MB  Mixed precision
+    model_fp16.onnx      156 MB  Half precision
+    model.onnx           311 MB  Full fp32
+
+v1.0 breaking change: ONNX input key renamed "tokens" → "input_ids".
 """
 
 from __future__ import annotations
@@ -26,20 +35,30 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 class PATHS:
     # ── STT — faster-whisper distil-large-v3 (INT8, CPU) ──────
-    STT_MODEL_DIR = Path(r"E:\distil-large-v3-ct2").resolve()
+    # CTranslate2 INT8 format — converted from distil-whisper/distil-large-v3
+    # Run: ct2-transformers-converter --model E:\distil-large-v3-ct2
+    #      --output_dir E:\distil-large-v3-ct2-int8 --quantization int8
+    #      --copy_files tokenizer.json preprocessor_config.json
+    STT_MODEL_DIR = Path(r"E:\distil-large-v3-ct2-int8").resolve()
 
     # ── TTS — Kokoro-82M ONNX (onnx-community/Kokoro-82M-ONNX) ──
     #
     # TTS_ONNX_MODEL: Path to the ONNX model file.
-    #   model_q8.onnx   → INT8 quantised, 88 MB, recommended for CPU (fast + small)
-    #   model.onnx      → full fp32, 310 MB, marginally higher quality
+    #   model_quantized.onnx → pure INT8, 89 MB  ← DEFAULT (CPU-safe, recommended)
+    #   model.onnx           → full fp32, 311 MB, marginally better quality
+    #   WARNING: model_q8f16.onnx crashes CPUExecutionProvider (fp16 ops unsupported on CPU)
     #
-    TTS_ONNX_MODEL = Path(r"E:\Kokoro-82M-ONNX\onnx\model_q8f16.onnx").resolve()
+    TTS_ONNX_MODEL = Path(r"E:\Kokoro-82M-v1.0-ONNX\onnx\model_quantized.onnx").resolve()
 
     # TTS_VOICES_DIR: Directory containing individual voice .bin files.
     #   Each file: <voice_name>.bin  e.g. am_fenrir.bin, am_onyx.bin
     #   Shape when loaded: (max_tokens, 1, 256) float32
-    TTS_VOICES_DIR = Path(r"E:\Kokoro-82M-ONNX\voices").resolve()
+    TTS_VOICES_DIR = Path(r"E:\Kokoro-82M-v1.0-ONNX\voices").resolve()
+
+    # TTS_TOKENIZER: tokenizer.json bundled with the model.
+    #   Contains the authoritative phoneme→token-id vocabulary at ["model"]["vocab"].
+    #   Used by synthesizer.py instead of any hardcoded vocab.
+    TTS_TOKENIZER = Path(r"E:\Kokoro-82M-v1.0-ONNX\tokenizer.json").resolve()
 
     # Output directory for test WAV files
     OUTPUT_DIR = (PROJECT_ROOT / "output").resolve()
@@ -53,8 +72,9 @@ class PATHS:
         errors: list[str] = []
         checks = [
             (cls.STT_MODEL_DIR,  "STT model directory"),
-            (cls.TTS_ONNX_MODEL, "TTS ONNX model (model_q8.onnx)"),
+            (cls.TTS_ONNX_MODEL, "TTS ONNX model (model_quantized.onnx)"),
             (cls.TTS_VOICES_DIR, "TTS voices directory"),
+            (cls.TTS_TOKENIZER,  "TTS tokenizer.json (phoneme vocabulary)"),
         ]
         for path, label in checks:
             if not path.exists():
@@ -62,7 +82,7 @@ class PATHS:
 
         # Check the three voices used by Sage Kaizen personas
         if cls.TTS_VOICES_DIR.exists():
-            for voice in ["am_fenrir", "am_michael", "am_onyx"]:
+            for voice in ["am_onyx", "am_michael", "am_echo"]:
                 vf = cls.TTS_VOICES_DIR / f"{voice}.bin"
                 if not vf.exists():
                     errors.append(f"Missing voice file: {vf}")
@@ -84,17 +104,35 @@ class STT:
     ENERGY_THRESHOLD   = 300
     SILENCE_CHUNKS_TO_STOP = 25
     MIN_SPEECH_CHUNKS  = 5
+    # ctranslate2 thread tuning — Ryzen 9 9950X3D (Zen 5, 16 physical cores)
+    # CPU_THREADS: intra-op parallelism (threads per compute op).
+    #   16 = all physical cores; hyperthreads (32) hurt INT8 VNNI throughput.
+    # INTER_THREADS: parallel decode streams. 1 = single utterance at a time.
+    CPU_THREADS   = 16
+    INTER_THREADS = 1
 
 
 class TTS:
     LANG        = "en-us"
     SAMPLE_RATE = 24_000
 
-    # Narrator voice (Morgan Freeman aesthetic — deep, warm, deliberate)
-    DEFAULT_VOICE = "am_fenrir"
+    # Narrator voice — deep, resonant African-American male aesthetic
+    # am_onyx: modeled on OpenAI's Onyx (98 Hz, gravelly, warm, modern authority)
+    DEFAULT_VOICE = "am_onyx"
     DEFAULT_SPEED = 0.87
 
     MIN_CHUNK_WORDS = 4
+
+    # onnxruntime SessionOptions — Ryzen 9 9950X3D (Zen 5, AVX-512 VNNI, 16 cores)
+    # model_quantized.onnx is pure INT8; onnxruntime maps these ops to AVX-512 VNNI
+    # kernels (VPDPBUSD etc.) when ORT_ENABLE_ALL is set.
+    #
+    # ORT_INTRA_THREADS: threads parallelising a single op (matrix multiply).
+    #   16 = physical cores only. Hyperthreads (32) hurt VNNI INT8 throughput.
+    # ORT_INTER_THREADS: threads executing independent ops concurrently.
+    #   1 = sequential — correct for single-stream TTS inference.
+    ORT_INTRA_THREADS = 16
+    ORT_INTER_THREADS = 1
 
 
 class ZMQ:

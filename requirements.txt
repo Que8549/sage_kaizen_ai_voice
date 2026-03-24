@@ -6,6 +6,13 @@
 # ─────────────────────────────────────────────────────────────
 faster-whisper>=1.2.1       # CTranslate2 Whisper inference
                             # ctranslate2 has NO wheels for Python 3.13+
+#
+# ONE-TIME MODEL CONVERSION (not a runtime dependency):
+#   pip install transformers accelerate
+#   ct2-transformers-converter --model "E:\distil-large-v3-ct2"
+#       --output_dir "E:\distil-large-v3-ct2-int8" --quantization int8
+#       --copy_files tokenizer.json preprocessor_config.json
+#   pip uninstall transformers accelerate -y   (optional cleanup)
 
 # ─────────────────────────────────────────────────────────────
 # TTS — Kokoro-82M via raw onnxruntime + misaki G2P
@@ -50,16 +57,16 @@ httpx>=0.27.0               # Health check HTTP client
 # TTS MODEL FILES (pre-installed on E:\, DO NOT download at runtime)
 # ─────────────────────────────────────────────────────────────
 #
-# Source: onnx-community/Kokoro-82M-ONNX (HuggingFace)
-# Download the entire repo to E:\Kokoro-82M-ONNX\
+# Source: onnx-community/Kokoro-82M-v1.0-ONNX (HuggingFace)
+# Download the entire repo to E:\Kokoro-82M-v1.0-ONNX\
 # The folder structure must be:
 #
-#   E:\Kokoro-82M-ONNX\
+#   E:\Kokoro-82M-v1.0-ONNX\
 #     onnx\
-#       model_q8.onnx      ← 88 MB — recommended
-#       model.onnx         ← 310 MB — optional, higher quality
+#       model_quantized.onnx  ← 89 MB — pure INT8, CPU-safe (REQUIRED)
+#       model.onnx            ← 326 MB — optional, full fp32
 #     voices\
-#       am_fenrir.bin      ← narrator voice  (required)
-#       am_michael.bin     ← teacher voice   (required)
-#       am_onyx.bin        ← quick voice     (required)
+#       am_fenrir.bin         ← narrator voice  (required)
+#       am_michael.bin        ← teacher voice   (required)
+#       am_onyx.bin           ← quick voice     (required)
 #       (+ all other .bin files from the voices/ folder)

@@ -13,13 +13,14 @@ Architecture:
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Optional
 
 import numpy as np
 import sounddevice as sd
 
-log = logging.getLogger(__name__)
+from sk_logging import get_logger
+
+_LOG = get_logger("sage_kaizen.voice.tts.player")
 
 
 class AudioPlayer:
@@ -46,7 +47,7 @@ class AudioPlayer:
     async def start(self) -> None:
         """Start the background playback loop."""
         self._task = asyncio.create_task(self._play_loop(), name="AudioPlayer")
-        log.info("AudioPlayer started")
+        _LOG.info("AudioPlayer started")
 
     async def stop(self) -> None:
         """Drain queue and stop the playback loop."""
@@ -54,7 +55,7 @@ class AudioPlayer:
         if self._task:
             await self._queue.put(None)          # sentinel to exit loop
             await asyncio.wait_for(self._task, timeout=3.0)
-        log.info("AudioPlayer stopped")
+        _LOG.info("AudioPlayer stopped")
 
     def enqueue(self, samples: np.ndarray, sr: int) -> None:
         """Enqueue an audio chunk. Non-blocking."""
@@ -111,9 +112,9 @@ class AudioPlayer:
             except asyncio.CancelledError:
                 break
             except Exception:
-                log.exception("Audio playback error")
+                _LOG.exception("Audio playback error")
 
-        log.debug("AudioPlayer loop exited")
+        _LOG.debug("AudioPlayer loop exited")
 
     @staticmethod
     def _play_blocking(samples: np.ndarray, sr: int) -> None:
