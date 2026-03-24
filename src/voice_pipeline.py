@@ -30,6 +30,8 @@ Integrated:
 from __future__ import annotations
 
 import asyncio
+import json
+import uuid
 from typing import Callable, Optional
 
 from sk_logging import get_logger
@@ -199,6 +201,19 @@ class VoicePipeline:
             interrupt_push = ctx.socket(zmq.PUSH)
             interrupt_push.connect(ZMQ.INTERRUPT_BUS)
             _LOG.info("Interrupt bus connected: %s", ZMQ.INTERRUPT_BUS)
+
+            # Announce readiness locally via TTS (direct, not via ZMQ token stream).
+            # drain() blocks until the audio has fully played through the speakers
+            # before sending the ready signal — ensures the greeting is heard.
+            await self.speak_text("Sage Kaizen online.", intent="chat")
+            await self._player.drain(timeout=12.0)
+
+            # Signal the main app that models are loaded and voice is ready
+            await transcript_push.send(json.dumps({
+                "type":       "voice_ready",
+                "session_id": str(uuid.uuid4()),
+            }).encode())
+            _LOG.info("Voice ready signal sent to main app")
 
             self._capture.start()
             _LOG.info("Integrated voice pipeline running")

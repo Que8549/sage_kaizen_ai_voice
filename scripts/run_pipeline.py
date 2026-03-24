@@ -1,18 +1,23 @@
 """
-scripts/run_pipeline.py — Standalone Voice Pipeline Entry Point
-================================================================
-Starts the full voice pipeline in standalone mode for development
-and testing. No ZeroMQ, no main Sage Kaizen app required.
+scripts/run_pipeline.py — Voice Pipeline Entry Point
+=====================================================
+Starts the voice pipeline in either standalone or integrated mode.
 
 Usage:
-    python scripts/run_pipeline.py [--persona narrator|mentor|teacher|chat|quick]
+    # Standalone (echo mode — no main app required):
+    python scripts/run_pipeline.py
 
-The pipeline will:
-  1. Load STT and TTS models from E:\\ drive
-  2. Announce readiness with a test phrase
-  3. Listen continuously for speech
-  4. Echo what was heard back through TTS (for testing)
-  5. Stop cleanly on Ctrl+C
+    # Integrated (ZMQ — requires main Sage Kaizen app to be running):
+    python scripts/run_pipeline.py --mode integrated
+
+Standalone mode:
+  Loads STT + TTS models, announces readiness, listens for speech, and
+  echoes heard text back via TTS.  Useful for testing without the main app.
+
+Integrated mode:
+  Connects to the main app via ZeroMQ (ports 5790/5791/5792).
+  Speaks "Sage Kaizen online." when models are loaded, then forwards
+  voice transcripts to the main app and speaks LLM responses aloud.
 
 Logging: all output goes to logs/sage_kaizen.log via sk_logging.
 stdout/stderr are intentionally kept clean — no shell redirection needed.
@@ -31,8 +36,8 @@ from src.voice_pipeline import VoicePipeline
 _LOG = get_logger("sage_kaizen.voice.runner")
 
 
-async def run(persona: str | None, verbose: bool) -> None:
-    """Load models and run the standalone voice loop."""
+async def run(persona: str | None, verbose: bool, mode: str) -> None:
+    """Load models and run the voice pipeline in the requested mode."""
     if verbose:
         import logging
         get_logger("sage_kaizen.voice.pipeline").setLevel(logging.DEBUG)
@@ -40,17 +45,20 @@ async def run(persona: str | None, verbose: bool) -> None:
         get_logger("sage_kaizen.voice.stt.transcriber").setLevel(logging.DEBUG)
 
     pipeline = VoicePipeline(
-        mode="standalone",
+        mode=mode,
         default_intent="chat",
         default_persona_override=persona,
     )
 
-    _LOG.info("run_pipeline: persona=%s verbose=%s", persona or "auto", verbose)
+    _LOG.info("run_pipeline: mode=%s persona=%s verbose=%s", mode, persona or "auto", verbose)
     print("   Loading STT + TTS models — this takes 30-60 s on first run...")
     sys.stdout.flush()
 
     try:
-        await pipeline.run_standalone()
+        if mode == "integrated":
+            await pipeline.run_integrated()
+        else:
+            await pipeline.run_standalone()
     except Exception as exc:
         _LOG.exception("Pipeline crashed: %s", exc)
         print(f"\n[ERROR] Pipeline crashed: {exc}", file=sys.stderr)
@@ -60,7 +68,17 @@ async def run(persona: str | None, verbose: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Sage Kaizen AI Voice — standalone pipeline"
+        description="Sage Kaizen AI Voice — voice pipeline"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["standalone", "integrated"],
+        default="standalone",
+        help=(
+            "Operation mode: "
+            "standalone = echo mode, no main app required; "
+            "integrated = ZMQ, requires main Sage Kaizen app to be running"
+        ),
     )
     parser.add_argument(
         "--persona",
@@ -76,13 +94,14 @@ def main() -> None:
     args = parser.parse_args()
 
     print("\nSage Kaizen AI Voice — Starting...")
+    print(f"   Mode    : {args.mode}")
     print(f"   Persona : {args.persona or 'auto'}")
     print(f"   Log     : logs/sage_kaizen.log")
     print("   Stop    : Ctrl+C\n")
     sys.stdout.flush()
 
     try:
-        asyncio.run(run(persona=args.persona, verbose=args.verbose))
+        asyncio.run(run(persona=args.persona, verbose=args.verbose, mode=args.mode))
     except KeyboardInterrupt:
         _LOG.info("run_pipeline: stopped by user (Ctrl+C)")
         print("\nPipeline stopped.")

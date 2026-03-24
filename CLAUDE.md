@@ -257,3 +257,7 @@ direct control over the inference pipeline.
 ## Notes for Claude (behavioral guidance)
 - Prefer small, incremental changes that preserve existing style.
 - When adding new features, prefer adding a module rather than tangling existing modules.
+
+
+## Related and Associated Projects
+ - Integrate with Sage Kaizen local-first AI assistant located at F:\Projects\sage_kaizen_ai\

@@ -175,7 +175,7 @@ async def _synth_and_enqueue(
         return
     try:
         samples, sr = await loop.run_in_executor(
-            None, lambda: synthesizer._synth_one(text, voice, speed, lang)
+            None, lambda: synthesizer.synth_one(text, voice, speed, lang)
         )
         player.enqueue(np.array(samples, dtype=np.float32), int(sr))
     except Exception:

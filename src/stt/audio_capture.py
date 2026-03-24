@@ -19,9 +19,7 @@ Threading model:
 
 from __future__ import annotations
 
-import audioop
 import queue
-import struct
 import threading
 from typing import Callable, Optional
 
@@ -149,8 +147,10 @@ class AudioCapture:
                 _LOG.warning("PyAudio read error: %s", e)
                 continue
 
-            # Fast energy gate: audioop.rms on int16 data
-            energy = audioop.rms(raw, 2)  # 2 bytes per sample (int16)
+            # Fast energy gate: RMS of int16 samples via numpy
+            energy = int(np.sqrt(np.mean(
+                np.frombuffer(raw, dtype=np.int16).astype(np.float32) ** 2
+            )))
 
             if energy > STT.ENERGY_THRESHOLD:
                 in_speech    = True

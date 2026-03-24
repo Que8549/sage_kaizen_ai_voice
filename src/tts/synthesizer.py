@@ -37,7 +37,7 @@ import asyncio
 import json
 import re
 import threading
-from typing import Any, AsyncIterator, Iterator, Optional
+from typing import Any, AsyncGenerator, Iterator, Optional
 
 import numpy as np
 import onnxruntime as ort
@@ -404,7 +404,7 @@ class KokoroSynthesizer:
         voice: str   = TTS.DEFAULT_VOICE,
         speed: float = TTS.DEFAULT_SPEED,
         lang:  str   = TTS.LANG,
-    ) -> AsyncIterator[tuple[np.ndarray, int]]:
+    ) -> AsyncGenerator[tuple[np.ndarray, int], None]:
         """Async streaming generator — synthesis runs in thread executor."""
         if not self._ready:
             self.initialize()
@@ -419,6 +419,6 @@ class KokoroSynthesizer:
             if len(audio) > 0:
                 yield audio, sr
 
-    def _synth_one(self, text: str, voice: str, speed: float, lang: str = "en-us"):
-        """Compatibility method for ZMQ handler."""
+    def synth_one(self, text: str, voice: str, speed: float, lang: str = "en-us") -> tuple[np.ndarray, int]:
+        """Synthesize a single sentence chunk. Used by the ZMQ handler."""
         return self._synth_text(text, voice, speed)
