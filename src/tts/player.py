@@ -150,4 +150,4 @@ class AudioPlayer:
     @staticmethod
     def _play_blocking(samples: np.ndarray, sr: int) -> None:
         """Play audio synchronously — runs in thread executor."""
-        sd.play(samples, sr, blocking=True)
+        sd.play(samples, sr, blocking=True, latency="low")

@@ -72,7 +72,7 @@ class PATHS:
         errors: list[str] = []
         checks = [
             (cls.STT_MODEL_DIR,  "STT model directory"),
-            (cls.TTS_ONNX_MODEL, "TTS ONNX model (model_quantized.onnx)"),
+            (cls.TTS_ONNX_MODEL, "TTS ONNX model"),
             (cls.TTS_VOICES_DIR, "TTS voices directory"),
             (cls.TTS_TOKENIZER,  "TTS tokenizer.json (phoneme vocabulary)"),
         ]
@@ -102,7 +102,6 @@ class STT:
     CHUNK_FRAMES       = 480
     FORMAT_PAUDIO      = 8
     ENERGY_THRESHOLD   = 300
-    SILENCE_CHUNKS_TO_STOP = 25
     MIN_SPEECH_CHUNKS  = 5
     # ctranslate2 thread tuning — Ryzen 9 9950X3D (Zen 5, 16 physical cores)
     # CPU_THREADS: intra-op parallelism (threads per compute op).
@@ -110,6 +109,20 @@ class STT:
     # INTER_THREADS: parallel decode streams. 1 = single utterance at a time.
     CPU_THREADS   = 16
     INTER_THREADS = 1
+
+    # Endpoint detection tuning
+    # SILENCE_CHUNKS_TO_STOP: chunks of silence before utterance is emitted.
+    #   10 chunks × 30ms = 300ms — fast enough for voice assistant response.
+    #   Silero VAD inside faster-whisper acts as a second safety net.
+    SILENCE_CHUNKS_TO_STOP = 10
+
+    # Silero VAD parameters passed to WhisperModel.transcribe().
+    # Overrides the built-in defaults (min_silence_duration_ms=2000 is too slow
+    # for interactive voice assistants).
+    VAD_PARAMETERS = {
+        "min_silence_duration_ms": 500,  # was 2000ms default
+        "speech_pad_ms":           200,  # context padding around speech
+    }
 
 
 class TTS:

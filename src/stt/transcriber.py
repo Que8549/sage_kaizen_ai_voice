@@ -32,6 +32,7 @@ from faster_whisper import WhisperModel
 from sk_logging import get_logger
 from src.config import PATHS, STT
 
+
 _LOG = get_logger("sage_kaizen.voice.stt.transcriber")
 
 
@@ -90,7 +91,7 @@ class Transcriber:
                 )
                 self._ready = True
 
-        _LOG.info("STT model ready — distil-large-v3 INT8 CPU")
+        _LOG.info("STT model ready — distil-large-v3 %s CPU", STT.COMPUTE_TYPE)
 
     @property
     def is_ready(self) -> bool:
@@ -124,6 +125,7 @@ class Transcriber:
                 language=STT.LANGUAGE,
                 condition_on_previous_text=STT.CONDITION_ON_PREV_TEXT,
                 vad_filter=STT.VAD_FILTER,
+                vad_parameters=STT.VAD_PARAMETERS,
             )
             # segments is a generator — consume it inside the lock
             text = " ".join(seg.text for seg in segments).strip()

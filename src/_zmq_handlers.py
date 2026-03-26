@@ -25,6 +25,20 @@ Message schemas (JSON over ZMQ):
 
   Interrupt (TTS → Main, port 5792):
     {"type": "interrupt", "session_id": "old-uuid", "reason": "new_speech"}
+
+Synthesis pipeline (pipelined / non-blocking):
+  _submit_synth() submits each sentence to a thread executor immediately,
+  without awaiting. The returned future + session_id are pushed to an
+  asyncio.Queue consumed by _collect_synth(), which awaits each future in
+  order and enqueues the audio for playback.
+
+  This means token reception, G2P/tokenisation, and ONNX inference can
+  overlap: while the executor runs inference for sentence N, the event loop
+  receives tokens and begins G2P for sentence N+1.
+
+  Barge-in safety: each future is tagged with the session_id at submit time.
+  The collector discards audio whose session_id no longer matches the live
+  session, preventing stale audio from a prior turn playing after reset.
 """
 
 from __future__ import annotations
@@ -51,6 +65,7 @@ _SENTENCE_END_RE = re.compile(r"[.!?](\s|$)")
 
 class _SentenceBuffer:
     """Accumulates streaming tokens and flushes complete sentences."""
+
     def __init__(self) -> None:
         self._buf = ""
 
@@ -73,6 +88,10 @@ class _SentenceBuffer:
         self._buf = ""
         return remaining
 
+
+# ─────────────────────────────────────────────────────────
+# STT pusher
+# ─────────────────────────────────────────────────────────
 
 async def run_stt_pusher(
     capture:     AudioCapture,
@@ -100,83 +119,167 @@ async def run_stt_pusher(
         _LOG.info("Transcript sent: %r", text[:60])
 
 
+# ─────────────────────────────────────────────────────────
+# Pipelined TTS synthesis helpers
+# ─────────────────────────────────────────────────────────
+
+def _submit_synth(
+    text:        str,
+    voice:       str,
+    speed:       float,
+    lang:        str,
+    session_id:  str,
+    synthesizer: KokoroSynthesizer,
+    synth_queue: asyncio.Queue,
+    loop:        asyncio.AbstractEventLoop,
+) -> None:
+    """
+    Submit a synthesis task to the thread executor without blocking.
+
+    The future is immediately pushed to synth_queue alongside the session_id
+    that was active at submit time. The collector uses that tag to discard
+    audio from stale sessions (barge-in protection).
+    """
+    if not text.strip():
+        return
+    fut = loop.run_in_executor(
+        None, lambda: synthesizer.synth_one(text, voice, speed, lang)
+    )
+    synth_queue.put_nowait((fut, session_id))
+    _LOG.debug("Synth submitted (session=%.8s): %r", session_id, text[:40])
+
+
+async def _collect_synth(
+    queue:           asyncio.Queue,
+    player:          AudioPlayer,
+    current_sid_ref: list[Optional[str]],
+) -> None:
+    """
+    Await synthesis futures in submission order and enqueue audio.
+
+    Runs as a background asyncio Task for the lifetime of run_tts_subscriber.
+    Exits when it receives a None sentinel.
+
+    Audio from a session that is no longer current (barge-in occurred between
+    submit and collect) is silently discarded.
+    """
+    _LOG.debug("SynthCollector started")
+    while True:
+        item = await queue.get()
+        if item is None:
+            break
+        fut, sid = item
+        try:
+            samples, sr = await fut
+            if sid == current_sid_ref[0] and len(samples) > 0:
+                player.enqueue(np.array(samples, dtype=np.float32), int(sr))
+        except Exception:
+            _LOG.exception("Synthesis collect error (session=%.8s)", sid)
+    _LOG.debug("SynthCollector stopped")
+
+
+# ─────────────────────────────────────────────────────────
+# TTS subscriber
+# ─────────────────────────────────────────────────────────
+
 async def run_tts_subscriber(
     sub_socket,
     interrupt_push,
     synthesizer: KokoroSynthesizer,
     player:      AudioPlayer,
 ) -> None:
-    """Receive LLM token stream, synthesize, play audio, handle barge-in."""
-    session_id:   Optional[str] = None
+    """
+    Receive LLM token stream, synthesize sentences in a pipelined fashion,
+    play audio in order, and handle barge-in.
+
+    Synthesis is submitted to the thread executor immediately upon sentence
+    completion, without awaiting.  A background collector coroutine awaits
+    each future in order and enqueues the audio for playback.  This allows
+    token reception and inference to overlap:
+
+        Main loop:   recv token → sentence complete → submit → recv token → ...
+        Collector:             await inference ──────────────── enqueue audio
+
+    Barge-in: player.interrupt() stops current audio and drains the player
+    queue.  Futures already submitted but not yet collected are discarded by
+    the collector's session_id check after current_sid_ref is updated.
+    """
+    session_id: Optional[str] = None
     voice   = TTS.DEFAULT_VOICE
     speed   = TTS.DEFAULT_SPEED
     lang    = TTS.LANG
     buf     = _SentenceBuffer()
     loop    = asyncio.get_running_loop()
 
+    # One-element list so the collector can read the live session_id without
+    # a closure-capture issue across coroutine boundaries.
+    current_sid_ref: list[Optional[str]] = [None]
+
+    # Ordered queue of (Future, session_id) tuples.
+    synth_queue: asyncio.Queue = asyncio.Queue()
+    collector = asyncio.create_task(
+        _collect_synth(synth_queue, player, current_sid_ref),
+        name="SynthCollector",
+    )
+
     _LOG.info("TTS subscriber running")
 
-    while True:
-        try:
-            raw = await sub_socket.recv()
-            msg = json.loads(raw)
-        except Exception:
-            _LOG.exception("ZMQ receive error")
-            continue
-
-        mtype = msg.get("type")
-
-        if mtype == "session_start":
-            old_sid = session_id
-            new_sid = msg["session_id"]
-
-            if old_sid and old_sid != new_sid:
-                _LOG.info("Barge-in: old=%s new=%s", old_sid[:8], new_sid[:8])
-                player.interrupt()
-                await interrupt_push.send(json.dumps({
-                    "type":       "interrupt",
-                    "session_id": old_sid,
-                    "reason":     "new_speech",
-                }).encode())
-
-            player.reset()
-            session_id = new_sid
-            voice  = msg.get("voice", TTS.DEFAULT_VOICE)
-            speed  = float(msg.get("speed", TTS.DEFAULT_SPEED))
-            lang   = msg.get("lang", TTS.LANG)
-            buf    = _SentenceBuffer()
-
-        elif mtype == "token":
-            if msg.get("session_id") != session_id:
-                continue
-            for sentence in buf.feed(msg.get("text", "")):
-                await _synth_and_enqueue(sentence, voice, speed, lang,
-                                         synthesizer, player, loop)
-
-        elif mtype == "turn_done":
-            if msg.get("session_id") != session_id:
-                continue
-            remaining = buf.flush()
-            if remaining:
-                await _synth_and_enqueue(remaining, voice, speed, lang,
-                                         synthesizer, player, loop)
-
-
-async def _synth_and_enqueue(
-    text:        str,
-    voice:       str,
-    speed:       float,
-    lang:        str,
-    synthesizer: KokoroSynthesizer,
-    player:      AudioPlayer,
-    loop:        asyncio.AbstractEventLoop,
-) -> None:
-    if not text.strip():
-        return
     try:
-        samples, sr = await loop.run_in_executor(
-            None, lambda: synthesizer.synth_one(text, voice, speed, lang)
-        )
-        player.enqueue(np.array(samples, dtype=np.float32), int(sr))
-    except Exception:
-        _LOG.exception("Synthesis error: %r", text[:50])
+        while True:
+            try:
+                raw = await sub_socket.recv()
+                msg = json.loads(raw)
+            except Exception:
+                _LOG.exception("ZMQ receive error")
+                continue
+
+            mtype = msg.get("type")
+
+            if mtype == "session_start":
+                old_sid = session_id
+                new_sid = msg["session_id"]
+
+                if old_sid and old_sid != new_sid:
+                    _LOG.info("Barge-in: old=%s new=%s", old_sid[:8], new_sid[:8])
+                    player.interrupt()
+                    # Drain unstarted synthesis futures from the old session.
+                    # Any already-running futures will be discarded by the
+                    # collector once current_sid_ref is updated below.
+                    while not synth_queue.empty():
+                        try:
+                            synth_queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
+                    await interrupt_push.send(json.dumps({
+                        "type":       "interrupt",
+                        "session_id": old_sid,
+                        "reason":     "new_speech",
+                    }).encode())
+
+                player.reset()
+                session_id         = new_sid
+                current_sid_ref[0] = new_sid   # collector sees the new session
+                voice  = msg.get("voice", TTS.DEFAULT_VOICE)
+                speed  = float(msg.get("speed", TTS.DEFAULT_SPEED))
+                lang   = msg.get("lang", TTS.LANG)
+                buf    = _SentenceBuffer()
+
+            elif mtype == "token":
+                if msg.get("session_id") != session_id:
+                    continue
+                for sentence in buf.feed(msg.get("text", "")):
+                    _submit_synth(sentence, voice, speed, lang,
+                                  session_id, synthesizer, synth_queue, loop)
+
+            elif mtype == "turn_done":
+                if msg.get("session_id") != session_id:
+                    continue
+                remaining = buf.flush()
+                if remaining:
+                    _submit_synth(remaining, voice, speed, lang,
+                                  session_id, synthesizer, synth_queue, loop)
+
+    finally:
+        # Stop the collector gracefully.
+        await synth_queue.put(None)
+        await collector

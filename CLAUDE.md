@@ -15,7 +15,9 @@ and text-to-speech output for the system.
 
 ---
 
-## Host System
+## CURRENT HARDWARE (Authoritative)
+
+User rig also known as "my rig":
 
 | Component | Value |
 |---|---|
@@ -25,6 +27,7 @@ and text-to-speech output for the system.
 | GPU 0 | NVIDIA RTX 5090 32 GB (Fast Brain LLM) |
 | GPU 1 | NVIDIA RTX 5080 16 GB (Architect Brain LLM) |
 | CUDA | 12.8 |
+| Storgae | 40 TB mixed SSD/HDD |
 | Python (this venv) | **3.11.x ONLY** (ctranslate2 constraint) |
 | Main Sage Kaizen Python | 3.14.3 (separate process, communicates via ZMQ) |
 
@@ -260,4 +263,5 @@ direct control over the inference pipeline.
 
 
 ## Related and Associated Projects
- - Integrate with Sage Kaizen local-first AI assistant located at F:\Projects\sage_kaizen_ai\
+ - Integrate with Sage Kaizen local-first AI assistant (main app) located at F:\Projects\sage_kaizen_ai\
+ - Sage Kaizen Voice located (voice app) at F:\Projects\sage_kaizen_ai_voice\

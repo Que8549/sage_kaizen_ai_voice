@@ -14,7 +14,7 @@ Properties
 - propagate    : False — messages never bubble to the root logger
 - stdout/stderr: NOT attached — all output goes to the rotating file only
 - Handler      : single RotatingFileHandler shared across all loggers
-                 Max 5 MB per file · 5 backups (sage_kaizen.log.1 … .5)
+                 Max 5 MB per file · 5 backups (sage_kaizen_voice.log.1 … .5)
 - Encoding     : UTF-8
 - Format       : %(asctime)s | %(levelname)s | %(name)s | %(message)s
 - Date format  : %Y-%m-%d %H:%M:%S

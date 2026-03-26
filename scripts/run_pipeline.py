@@ -19,7 +19,7 @@ Integrated mode:
   Speaks "Sage Kaizen online." when models are loaded, then forwards
   voice transcripts to the main app and speaks LLM responses aloud.
 
-Logging: all output goes to logs/sage_kaizen.log via sk_logging.
+Logging: all output goes to logs/sage_kaizen_voice.log via sk_logging.
 stdout/stderr are intentionally kept clean — no shell redirection needed.
 """
 
@@ -62,7 +62,7 @@ async def run(persona: str | None, verbose: bool, mode: str) -> None:
     except Exception as exc:
         _LOG.exception("Pipeline crashed: %s", exc)
         print(f"\n[ERROR] Pipeline crashed: {exc}", file=sys.stderr)
-        print("[ERROR] Full traceback written to logs/sage_kaizen.log", file=sys.stderr)
+        print("[ERROR] Full traceback written to logs/sage_kaizen_voice.log", file=sys.stderr)
         sys.exit(1)
 
 
@@ -96,7 +96,7 @@ def main() -> None:
     print("\nSage Kaizen AI Voice — Starting...")
     print(f"   Mode    : {args.mode}")
     print(f"   Persona : {args.persona or 'auto'}")
-    print(f"   Log     : logs/sage_kaizen.log")
+    print(f"   Log     : logs/sage_kaizen_voice.log")
     print("   Stop    : Ctrl+C\n")
     sys.stdout.flush()
 

@@ -41,7 +41,7 @@ logs:
   # default: unified log file read by sk_logging.get_logger()
   # Path is relative to the project root (sage_kaizen_ai_voice/).
   # Python fallback when this key is absent: logs/sage_kaizen_voice.log
-  default: "logs/sage_kaizen.log"
+  default: "logs/sage_kaizen_voice.log"
   dir:  "logs"
 
 output:

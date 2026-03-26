@@ -248,7 +248,7 @@ class KokoroSynthesizer:
                 f"TTS ONNX model not found: {model_path}\n"
                 "Run scripts/verify_setup.py for diagnostics.\n"
                 "Expected: E:\\Kokoro-82M-v1.0-ONNX\\onnx\\model_quantized.onnx\n"
-                "WARNING: Do NOT use model_q8f16.onnx — it crashes CPUExecutionProvider."
+                "WARNING: Do NOT use model_q8f16.onnx — it crashes CPUExecutionProvider on CPU."
             )
         if not voices_dir.exists():
             raise FileNotFoundError(
@@ -265,16 +265,29 @@ class KokoroSynthesizer:
                     opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
                     opts.intra_op_num_threads = TTS.ORT_INTRA_THREADS
                     opts.inter_op_num_threads = TTS.ORT_INTER_THREADS
+
                     self._session = ort.InferenceSession(
                         str(model_path),
                         sess_options=opts,
                         providers=["CPUExecutionProvider"],
                     )
                     self._ready = True
+                    _LOG.info(
+                        "Kokoro ONNX model ready — model=%s providers=%s",
+                        model_path.name, self._session.get_providers(),
+                    )
         except Exception:
             _LOG.exception("Failed to load Kokoro ONNX model: %s", model_path)
             raise
-        _LOG.info("Kokoro ONNX model ready")
+
+        # Pre-warm voice files used by all Sage Kaizen personas.
+        # Eliminates first-call file-load latency on the opening utterance.
+        for _voice in ("am_onyx", "am_michael", "am_echo"):
+            try:
+                self._load_voice(_voice)
+                _LOG.debug("Voice pre-warmed: %s", _voice)
+            except FileNotFoundError:
+                _LOG.warning("Voice pre-warm skipped (file not found): %s", _voice)
 
     @property
     def is_ready(self) -> bool:
