@@ -112,16 +112,23 @@ class STT:
 
     # Endpoint detection tuning
     # SILENCE_CHUNKS_TO_STOP: chunks of silence before utterance is emitted.
-    #   10 chunks × 30ms = 300ms — fast enough for voice assistant response.
-    #   Silero VAD inside faster-whisper acts as a second safety net.
-    SILENCE_CHUNKS_TO_STOP = 10
+    #   25 chunks × 30ms = 750ms — matches natural inter-word pause duration
+    #   in English speech.  Prevents splitting wh-questions like "Who was the
+    #   third president…" where "Who?" has a brief pause before the predicate.
+    #   Production voice assistants (Vapi, LiveKit) use 750–800 ms.
+    #   The energy gate MUST be >= min_silence_duration_ms in VAD_PARAMETERS
+    #   or Stage 1 will cut the utterance before Stage 2 (Silero) can apply
+    #   its own silence padding, producing false sentence splits.
+    SILENCE_CHUNKS_TO_STOP = 25
 
     # Silero VAD parameters passed to WhisperModel.transcribe().
     # Overrides the built-in defaults (min_silence_duration_ms=2000 is too slow
     # for interactive voice assistants).
+    # Keep min_silence_duration_ms <= SILENCE_CHUNKS_TO_STOP × 30ms (750ms)
+    # so Silero never fires before the energy gate does.
     VAD_PARAMETERS = {
-        "min_silence_duration_ms": 500,  # was 2000ms default
-        "speech_pad_ms":           200,  # context padding around speech
+        "min_silence_duration_ms": 700,  # raised from 500ms; matches 750ms gate
+        "speech_pad_ms":           400,  # raised from 200ms; preserves breath pauses
     }
 
 

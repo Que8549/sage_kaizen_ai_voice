@@ -58,6 +58,10 @@ class AudioCapture:
         self._thread: Optional[threading.Thread] = None
         self._pa: Optional[pyaudio.PyAudio] = None
         self._stream = None
+        # Mute gate — set by mute(), cleared by unmute().
+        # When set, _emit() silently discards utterances.  The capture thread
+        # still reads from the mic so the PyAudio stream stays healthy.
+        self._muted = threading.Event()
 
     # ─────────────────────────────────────────────────────────
     # Public API
@@ -111,6 +115,32 @@ class AudioCapture:
             return self._queue.get(timeout=timeout)
         except queue.Empty:
             return None
+
+    def mute(self) -> None:
+        """Suppress utterance emission.  Capture thread still reads the mic.
+        Safe to call from any thread or coroutine."""
+        self._muted.set()
+        _LOG.debug("AudioCapture muted")
+
+    def unmute(self) -> None:
+        """Resume utterance emission.  Safe to call from any thread or coroutine."""
+        self._muted.clear()
+        _LOG.debug("AudioCapture unmuted")
+
+    def flush_queue(self) -> int:
+        """Discard all utterances currently waiting in the queue.
+        Call after mute() to clear any echo utterances that were already
+        buffered before the mute took effect.  Returns the count discarded."""
+        count = 0
+        while True:
+            try:
+                self._queue.get_nowait()
+                count += 1
+            except queue.Empty:
+                break
+        if count:
+            _LOG.debug("AudioCapture flushed %d buffered utterance(s)", count)
+        return count
 
     def list_devices(self) -> list[dict]:
         """Return a list of available input audio devices."""
@@ -187,7 +217,10 @@ class AudioCapture:
         return samples.astype(np.float32) / 32768.0
 
     def _emit(self, audio: np.ndarray) -> None:
-        """Send utterance to callback or internal queue."""
+        """Send utterance to callback or internal queue.
+        No-op while muted (mic reads continue; utterances are silently dropped)."""
+        if self._muted.is_set():
+            return
         if self._callback is not None:
             try:
                 self._callback(audio)

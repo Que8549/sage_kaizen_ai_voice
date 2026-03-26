@@ -221,12 +221,23 @@ class VoicePipeline:
             # Import here to avoid circular import issues in standalone mode
             from src._zmq_handlers import run_stt_pusher, run_tts_subscriber
 
+            # Shared state between the two coroutines.
+            # current_sid_ref: run_tts_subscriber tracks the active TTS session;
+            #   run_stt_pusher sets it to None on new-chat so _collect_synth
+            #   discards stale synthesis futures from the old turn.
+            # synth_queue: ordered (Future, session_id) queue consumed by
+            #   the _collect_synth task inside run_tts_subscriber.
+            current_sid_ref: list[Optional[str]] = [None]
+            synth_queue: asyncio.Queue = asyncio.Queue()
+
             await asyncio.gather(
                 run_stt_pusher(
-                    self._capture, self._transcriber, transcript_push
+                    self._capture, self._transcriber, transcript_push,
+                    self._player, self._synthesizer, current_sid_ref,
                 ),
                 run_tts_subscriber(
-                    token_sub, interrupt_push, self._synthesizer, self._player
+                    token_sub, interrupt_push, self._synthesizer, self._player,
+                    current_sid_ref, synth_queue,
                 ),
             )
         except asyncio.CancelledError:
