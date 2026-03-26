@@ -15,7 +15,9 @@ and text-to-speech output for the system.
 
 ---
 
-## Host System
+## CURRENT HARDWARE (Authoritative)
+
+User rig also known as "my rig":
 
 | Component | Value |
 |---|---|
@@ -25,6 +27,7 @@ and text-to-speech output for the system.
 | GPU 0 | NVIDIA RTX 5090 32 GB (Fast Brain LLM) |
 | GPU 1 | NVIDIA RTX 5080 16 GB (Architect Brain LLM) |
 | CUDA | 12.8 |
+| Storgae | 40 TB mixed SSD/HDD |
 | Python (this venv) | **3.11.x ONLY** (ctranslate2 constraint) |
 | Main Sage Kaizen Python | 3.14.3 (separate process, communicates via ZMQ) |
 
@@ -59,8 +62,8 @@ KokoroSynthesizer  (src/tts/synthesizer.py)
     │  misaki[en]          text → IPA phonemes
     │  phoneme_to_ids()    IPA chars → token IDs (Kokoro vocab)
     │  voices/am_fenrir.bin[seq_len] → style vector (1, 256)
-    │  onnxruntime.InferenceSession(model_q8.onnx)
-    │  inputs: tokens, style, speed → output: float32 audio @ 24kHz
+    │  onnxruntime.InferenceSession(model_quantized.onnx)
+    │  inputs: input_ids, style, speed → output: float32 audio @ 24kHz
     ▼
 AudioPlayer   (src/tts/player.py)
     │  asyncio queue + sounddevice
@@ -76,34 +79,39 @@ Speakers
 
 | Item | Value |
 |---|---|
-| Source | Systran/faster-distil-whisper-large-v3 (HuggingFace) |
-| Path | `E:\distil-large-v3-ct2\` |
+| Source | distil-whisper/distil-large-v3 (HuggingFace) — converted locally to CT2 INT8 |
+| Raw download | `E:\distil-large-v3-ct2\` (Transformers format — model.safetensors) |
+| CT2 model | `E:\distil-large-v3-ct2-int8\` (CTranslate2 format — model.bin, pure INT8) |
 | Device | CPU only |
-| Quant | INT8 |
+| Quant | INT8 (direct conversion — smaller than loading FP16 and quantizing at runtime) |
 | Speed | 6.3× faster than large-v3, within 1% WER |
+| Convert cmd | `ct2-transformers-converter --model E:\distil-large-v3-ct2 --output_dir E:\distil-large-v3-ct2-int8 --quantization int8 --copy_files tokenizer.json preprocessor_config.json` |
 
 ### TTS — Kokoro-82M ONNX
-# \model_q8.onnx
 
 | Item | Value |
 |---|---|
-| Source | **onnx-community/Kokoro-82M-ONNX** (HuggingFace) |
-| ONNX model | `E:\Kokoro-82M-ONNX\onnx\model_q8f16.onnx` (88 MB INT8) |
-| Voices dir | `E:\Kokoro-82M-ONNX\voices\` |
+| Source | **onnx-community/Kokoro-82M-v1.0-ONNX** (HuggingFace) |
+| ONNX model | `E:\Kokoro-82M-v1.0-ONNX\onnx\model_quantized.onnx` (89 MB pure INT8) |
+| Voices dir | `E:\Kokoro-82M-v1.0-ONNX\voices\` |
 | Python API | Raw `onnxruntime.InferenceSession` + `misaki[en]` G2P |
 | No pip pkg | **kokoro-onnx is NOT used** — raw onnxruntime only |
 
+> **WARNING**: `model_q8f16.onnx` mixes INT8 weights with fp16 activations and **crashes
+> CPUExecutionProvider** at the C++ level (no Python exception). Always use
+> `model_quantized.onnx` (pure INT8) for CPU inference.
+
 **Exact file layout on E:\ drive:**
 ```
-E:\kokoro\
+E:\Kokoro-82M-v1.0-ONNX\
   onnx\
-    model_q8.onnx      ← used (INT8, 88 MB, recommended for CPU)
-    model.onnx         ← optional (fp32, 310 MB)
-    model_fp16.onnx    ← optional (fp16, 169 MB)
+    model_quantized.onnx  ← DEFAULT (pure INT8, 89 MB, CPU-safe)
+    model.onnx            ← optional (fp32, 311 MB)
+    model_fp16.onnx       ← optional (fp16, 156 MB)
   voices\
-    am_fenrir.bin      ← narrator/mentor/chat  (REQUIRED)
+    am_onyx.bin        ← narrator/mentor/chat  (REQUIRED)
     am_michael.bin     ← teacher               (REQUIRED)
-    am_onyx.bin        ← quick/device control  (REQUIRED)
+    am_echo.bin        ← quick/device control  (REQUIRED)
     af_heart.bin       ← (and all other voices from the repo)
     ...
 ```
@@ -122,12 +130,12 @@ token_ids = phoneme_to_ids(phonemes)   # max 510 IDs
 voice_array = np.fromfile("voices/am_fenrir.bin", dtype=np.float32).reshape(-1, 1, 256)
 style = voice_array[len(token_ids)]    # index by sequence length → (1, 256)
 
-# 4. Run ONNX inference
-sess = onnxruntime.InferenceSession("onnx/model_q8.onnx")
+# 4. Run ONNX inference (v1.0: input key is "input_ids", was "tokens" in older pack)
+sess = onnxruntime.InferenceSession("onnx/model_quantized.onnx")
 audio = sess.run(None, {
-    "tokens": np.array([[0, *token_ids, 0]], dtype=np.int64),
-    "style":  style,                        # (1, 256) float32
-    "speed":  np.array([0.87], dtype=np.float32),
+    "input_ids": np.array([[0, *token_ids, 0]], dtype=np.int64),
+    "style":     style,                        # (1, 256) float32
+    "speed":     np.array([0.87], dtype=np.float32),
 })[0]   # float32 audio at 24kHz
 ```
 
@@ -135,15 +143,17 @@ audio = sess.run(None, {
 
 ## Narrator Voice Identity — "Sage"
 
-Target: measured, warm, authoritative storyteller (Morgan Freeman aesthetic).
+Target: deep, resonant, warm African-American male voice.
+Aesthetic reference: am_onyx — modeled on OpenAI's Onyx (98 Hz, gravelly,
+"rich and sophisticated", modern authority, conversational warmth).
 
 | Persona | Voice | Speed | Use Case |
 |---|---|---|---|
-| **narrator** | `am_fenrir` | 0.87× | Creative, philosophy, astronomy, long-form |
-| **mentor** | `am_fenrir` | 0.92× | Tutor 6–9, research, code, architecture |
+| **narrator** | `am_onyx` | 0.87× | Creative, philosophy, astronomy, long-form |
+| **mentor** | `am_onyx` | 0.92× | Tutor 6–9, research, code, architecture |
 | **teacher** | `am_michael` | 0.95× | Tutor K–5, step-by-step explainers |
-| **chat** | `am_fenrir` | 1.00× | Conversational |
-| **quick** | `am_onyx` | 1.05× | Device control, status ACKs |
+| **chat** | `am_onyx` | 1.00× | Conversational |
+| **quick** | `am_echo` | 1.05× | Device control, status ACKs |
 
 ---
 
@@ -226,7 +236,7 @@ python tests/test_tts.py
 5. **No .bat files in launch paths** — Python launches directly
 6. **No `kokoro-onnx` pip package** — use raw `onnxruntime` + `misaki[en]`
 7. **Main app BINDS ZMQ sockets; this service CONNECTS**
-8. **`model_q8.onnx` is the default** — change via PATHS.TTS_ONNX_MODEL if needed
+8. **`model_quantized.onnx` is the default** — change via PATHS.TTS_ONNX_MODEL if needed. NEVER use `model_q8f16.onnx` on CPU — it crashes CPUExecutionProvider.
 
 ---
 
@@ -250,3 +260,8 @@ direct control over the inference pipeline.
 ## Notes for Claude (behavioral guidance)
 - Prefer small, incremental changes that preserve existing style.
 - When adding new features, prefer adding a module rather than tangling existing modules.
+
+
+## Related and Associated Projects
+ - Integrate with Sage Kaizen local-first AI assistant (main app) located at F:\Projects\sage_kaizen_ai\
+ - Sage Kaizen Voice located (voice app) at F:\Projects\sage_kaizen_ai_voice\

@@ -4,13 +4,14 @@ src/tts/expression_engine.py — Persona-Aware Speech Expression Engine
 Maps router intent + grade level + brain context to concrete Kokoro
 voice parameters.
 
-Target narrator character: engaged, warm, authoritative storyteller.
-Aesthetic reference: Morgan Freeman — depth, gravitas, unhurried cadence.
+Target narrator character: deep, warm, resonant African-American male voice.
+Aesthetic reference: am_onyx — modeled on OpenAI's Onyx (98 Hz, gravelly,
+"rich and sophisticated", modern coolness, conversational authority).
 
-Primary voice: am_fenrir (American male, deep and resonant)
+Primary voice: am_onyx (American male, deep and resonant)
+  - Available in onnx-community/Kokoro-82M-v1.0-ONNX voices/
   - Single stable voice, no blending, 100% API-stable
-  - Each persona uses am_fenrir with different speed and supporting voices
-    for variety across interaction modes
+  - Each persona uses am_onyx with different speed for variety
 
 Design principles:
   - Pure functions only (no I/O, no side effects)
@@ -29,14 +30,19 @@ from typing import Optional
 
 # ─────────────────────────────────────────────────────────────
 # Voice constants — all single-voice, API-stable
-# am_fenrir: deep, resonant American male — the Sage narrator voice
+# am_onyx:   deep, resonant, gravelly African-American male — primary Sage voice
+#            Modeled on OpenAI's Onyx (98 Hz, "rich and sophisticated",
+#            warm modern authority). Replaces am_fenrir as the narrator.
+# am_michael: warm, clear American male — teacher persona for younger learners
+# am_echo:   resonant, clear American male — device-control ACKs
+# All present in onnx-community/Kokoro-82M-v1.0-ONNX voices/
 # ─────────────────────────────────────────────────────────────
 
-VOICE_NARRATOR = "am_fenrir"   # deep, warm, unhurried — Morgan Freeman aesthetic
-VOICE_MENTOR   = "am_fenrir"   # same foundation, slower speed
-VOICE_TEACHER  = "am_michael"  # warmer, clearer — better for young children
-VOICE_CHAT     = "am_fenrir"   # natural baseline
-VOICE_QUICK    = "am_onyx"     # crisp, efficient for device control ACKs
+VOICE_NARRATOR = "am_onyx"    # deep, warm, gravelly — African-American male aesthetic
+VOICE_MENTOR   = "am_onyx"    # same foundation, slightly faster
+VOICE_TEACHER  = "am_michael" # warmer, clearer — better for young children
+VOICE_CHAT     = "am_onyx"    # natural baseline
+VOICE_QUICK    = "am_echo"    # resonant and clear — device control ACKs
 
 
 class Persona(str, Enum):

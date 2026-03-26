@@ -29,7 +29,7 @@ py -3.11 -m venv .venv
 pip install -r requirements.txt
 
 # 3. Install espeak-ng (download MSI, add to PATH)
-#    https://github.com/espeak-ng/espeak-ng/releases
+   https://github.com/espeak-ng/espeak-ng/releases
 
 # 4. Verify everything
 python scripts/verify_setup.py

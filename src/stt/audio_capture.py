@@ -19,19 +19,17 @@ Threading model:
 
 from __future__ import annotations
 
-import audioop
-import logging
 import queue
-import struct
 import threading
 from typing import Callable, Optional
 
 import numpy as np
 import pyaudio
 
+from sk_logging import get_logger
 from src.config import STT
 
-log = logging.getLogger(__name__)
+_LOG = get_logger("sage_kaizen.voice.stt.capture")
 
 
 class AudioCapture:
@@ -60,6 +58,10 @@ class AudioCapture:
         self._thread: Optional[threading.Thread] = None
         self._pa: Optional[pyaudio.PyAudio] = None
         self._stream = None
+        # Mute gate — set by mute(), cleared by unmute().
+        # When set, _emit() silently discards utterances.  The capture thread
+        # still reads from the mic so the PyAudio stream stays healthy.
+        self._muted = threading.Event()
 
     # ─────────────────────────────────────────────────────────
     # Public API
@@ -85,7 +87,7 @@ class AudioCapture:
             daemon=True,
         )
         self._thread.start()
-        log.info(
+        _LOG.info(
             "AudioCapture started — device=%s sample_rate=%d chunk=%dms",
             self._device or "default",
             STT.SAMPLE_RATE,
@@ -102,7 +104,7 @@ class AudioCapture:
             self._stream.close()
         if self._pa:
             self._pa.terminate()
-        log.info("AudioCapture stopped")
+        _LOG.info("AudioCapture stopped")
 
     def get_utterance(self, timeout: float = 0.5) -> Optional[np.ndarray]:
         """
@@ -113,6 +115,32 @@ class AudioCapture:
             return self._queue.get(timeout=timeout)
         except queue.Empty:
             return None
+
+    def mute(self) -> None:
+        """Suppress utterance emission.  Capture thread still reads the mic.
+        Safe to call from any thread or coroutine."""
+        self._muted.set()
+        _LOG.debug("AudioCapture muted")
+
+    def unmute(self) -> None:
+        """Resume utterance emission.  Safe to call from any thread or coroutine."""
+        self._muted.clear()
+        _LOG.debug("AudioCapture unmuted")
+
+    def flush_queue(self) -> int:
+        """Discard all utterances currently waiting in the queue.
+        Call after mute() to clear any echo utterances that were already
+        buffered before the mute took effect.  Returns the count discarded."""
+        count = 0
+        while True:
+            try:
+                self._queue.get_nowait()
+                count += 1
+            except queue.Empty:
+                break
+        if count:
+            _LOG.debug("AudioCapture flushed %d buffered utterance(s)", count)
+        return count
 
     def list_devices(self) -> list[dict]:
         """Return a list of available input audio devices."""
@@ -146,11 +174,13 @@ class AudioCapture:
                     exception_on_overflow=False,
                 )
             except OSError as e:
-                log.warning("PyAudio read error: %s", e)
+                _LOG.warning("PyAudio read error: %s", e)
                 continue
 
-            # Fast energy gate: audioop.rms on int16 data
-            energy = audioop.rms(raw, 2)  # 2 bytes per sample (int16)
+            # Fast energy gate: RMS of int16 samples via numpy
+            energy = int(np.sqrt(np.mean(
+                np.frombuffer(raw, dtype=np.int16).astype(np.float32) ** 2
+            )))
 
             if energy > STT.ENERGY_THRESHOLD:
                 in_speech    = True
@@ -170,7 +200,7 @@ class AudioCapture:
                         silent_count  = 0
                         in_speech     = False
 
-        log.debug("AudioCapture loop exited")
+        _LOG.debug("AudioCapture loop exited")
 
     # ─────────────────────────────────────────────────────────
     # Helpers
@@ -187,11 +217,14 @@ class AudioCapture:
         return samples.astype(np.float32) / 32768.0
 
     def _emit(self, audio: np.ndarray) -> None:
-        """Send utterance to callback or internal queue."""
+        """Send utterance to callback or internal queue.
+        No-op while muted (mic reads continue; utterances are silently dropped)."""
+        if self._muted.is_set():
+            return
         if self._callback is not None:
             try:
                 self._callback(audio)
             except Exception:
-                log.exception("on_utterance callback raised")
+                _LOG.exception("on_utterance callback raised")
         else:
             self._queue.put_nowait(audio)
