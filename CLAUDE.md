@@ -109,9 +109,9 @@ E:\Kokoro-82M-v1.0-ONNX\
     model.onnx            ← optional (fp32, 311 MB)
     model_fp16.onnx       ← optional (fp16, 156 MB)
   voices\
-    am_onyx.bin        ← narrator/mentor/chat  (REQUIRED)
+    am_fenrir.bin      ← narrator/mentor/chat  (REQUIRED)
     am_michael.bin     ← teacher               (REQUIRED)
-    am_echo.bin        ← quick/device control  (REQUIRED)
+    am_onyx.bin        ← quick/device control  (REQUIRED)
     af_heart.bin       ← (and all other voices from the repo)
     ...
 ```
@@ -144,16 +144,17 @@ audio = sess.run(None, {
 ## Narrator Voice Identity — "Sage"
 
 Target: deep, resonant, warm African-American male voice.
-Aesthetic reference: am_onyx — modeled on OpenAI's Onyx (98 Hz, gravelly,
-"rich and sophisticated", modern authority, conversational warmth).
+Default voice: `am_fenrir` (used for narrator, mentor, and chat personas).
 
 | Persona | Voice | Speed | Use Case |
 |---|---|---|---|
-| **narrator** | `am_onyx` | 0.87× | Creative, philosophy, astronomy, long-form |
-| **mentor** | `am_onyx` | 0.92× | Tutor 6–9, research, code, architecture |
+| **narrator** | `am_fenrir` | 0.87× | Creative, philosophy, astronomy, long-form |
+| **mentor** | `am_fenrir` | 0.92× | Tutor 6–9, research, code, architecture |
 | **teacher** | `am_michael` | 0.95× | Tutor K–5, step-by-step explainers |
-| **chat** | `am_onyx` | 1.00× | Conversational |
-| **quick** | `am_echo` | 1.05× | Device control, status ACKs |
+| **chat** | `am_fenrir` | 1.00× | Conversational |
+| **quick** | `am_onyx` | 1.05× | Device control, status ACKs |
+
+> Authoritative source: `config/voice.yaml` — always check it before referencing voice names.
 
 ---
 
@@ -179,27 +180,28 @@ sage_kaizen_ai_voice/
 ├── README.md
 ├── requirements.txt             ← pip install -r requirements.txt
 ├── pyproject.toml
+├── sk_logging.py                ← Centralized rotating log configuration
 ├── config/
-│   ├── paths.yaml               ← E:\ model paths
-│   └── voice.yaml               ← ZMQ addrs, persona defaults
+│   ├── paths.yaml               ← E:\ model paths (authoritative — never hardcode paths)
+│   └── voice.yaml               ← ZMQ addrs, persona/voice assignments (authoritative)
 ├── src/
-│   ├── config.py                ← PATHS, STT, TTS, ZMQ constants
-│   ├── voice_pipeline.py        ← Main orchestrator
-│   ├── _zmq_handlers.py         ← ZeroMQ integration
+│   ├── config.py                ← PATHS, STT, TTS, ZMQ constants (loaded from config/)
+│   ├── voice_pipeline.py        ← Main orchestrator (STT → Expression → TTS)
+│   ├── _zmq_handlers.py         ← ZeroMQ integration (CONNECTS to main app)
 │   ├── stt/
-│   │   ├── audio_capture.py     ← PyAudio + energy VAD
-│   │   └── transcriber.py       ← WhisperModel wrapper
+│   │   ├── audio_capture.py     ← PyAudio + energy VAD gate (16kHz, 30ms chunks)
+│   │   └── transcriber.py       ← faster-whisper + distil-large-v3 INT8 + Silero VAD
 │   └── tts/
 │       ├── expression_engine.py ← intent → persona → SpeechParams
-│       ├── synthesizer.py       ← onnxruntime + misaki G2P
+│       ├── synthesizer.py       ← onnxruntime + misaki G2P (Kokoro-82M ONNX)
 │       └── player.py            ← Async audio queue + sounddevice
 ├── scripts/
-│   ├── verify_setup.py          ← Pre-flight check
+│   ├── verify_setup.py          ← Pre-flight check (model files, ZMQ, audio devices)
 │   └── run_pipeline.py          ← Standalone entry point
 └── tests/
-    ├── test_expression.py       ← Unit tests (no hardware)
-    ├── test_tts.py              ← TTS synthesis test
-    └── test_stt.py              ← STT test
+    ├── test_expression.py       ← Unit tests for ExpressionEngine (no hardware)
+    ├── test_tts.py              ← TTS synthesis test (writes audio file)
+    └── test_stt.py              ← STT test (requires microphone)
 ```
 
 ---
@@ -208,16 +210,18 @@ sage_kaizen_ai_voice/
 
 ```powershell
 # 1. Python 3.11 venv ONLY
-# py -3.11 -m venv .venv
-# .venv\Scripts\activate
+py -3.11 -m venv .venv
+.venv\Scripts\activate
 
-# 2. Install all dependencies (one command, no workarounds)
-# pip install -r requirements.txt
+# 2. Install espeak-ng (REQUIRED before pip install — misaki[en] depends on it)
+#    Download MSI from https://github.com/espeak-ng/espeak-ng/releases
+#    Run installer, then add espeak-ng to PATH (e.g. C:\Program Files\eSpeak NG\)
+#    Verify: espeak-ng --version
 
-# 3. Install espeak-ng MSI → add to PATH
-#    https://github.com/espeak-ng/espeak-ng/releases
+# 3. Install all Python dependencies
+pip install -r requirements.txt
 
-# 4. Verify
+# 4. Verify setup (checks model files, ZMQ, audio devices)
 python scripts/verify_setup.py
 
 # 5. Test (no hardware needed)
@@ -260,6 +264,23 @@ direct control over the inference pipeline.
 ## Notes for Claude (behavioral guidance)
 - Prefer small, incremental changes that preserve existing style.
 - When adding new features, prefer adding a module rather than tangling existing modules.
+
+### Review Git History Before Implementing
+Before adding or reinstating any package, library, or approach, run:
+```
+git log --oneline -30
+git log --all --oneline --grep="<keyword>"
+git show <commit>
+```
+Past commits document what was tried and abandoned. Key known failures in this repo:
+- **`kokoro-onnx` pip package** — do NOT use; ships its own incompatible model/voice files. Use raw `onnxruntime` + `misaki[en]` directly.
+- **`model_q8f16.onnx`** — do NOT use on CPU; crashes `CPUExecutionProvider` at the C++ level with no Python exception. Always use `model_quantized.onnx` (pure INT8).
+- **Python 3.12+** — do NOT use; `ctranslate2` (required by `faster-whisper`) has no wheels for 3.12+. This venv must stay on Python 3.11.x.
+
+If a commit message says "reverted", "removed", "uninstalled", or describes a failure, read it before reimplementing the same approach.
+
+> **Voice/persona config reminder:** Voice assignments live in `config/voice.yaml`, not in CLAUDE.md.
+> Always read `voice.yaml` before referencing voice names — it is the authoritative source.
 
 
 ## Related and Associated Projects
