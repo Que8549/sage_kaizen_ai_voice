@@ -63,7 +63,7 @@ TTS gate / command-only barge-in:
 from __future__ import annotations
 
 import asyncio
-import json
+import msgspec.json as _json
 import re
 import time
 import uuid
@@ -243,11 +243,11 @@ async def run_stt_pusher(
             current_sid_ref[0] = None
 
             # 4. Notify main app — UI resets right away
-            await push_socket.send(json.dumps({
+            await push_socket.send(_json.encode({
                 "type":       "transcript",
                 "text":       text,
                 "session_id": str(uuid.uuid4()),
-            }).encode())
+            }))
             _LOG.info("New-chat command forwarded to main app")
 
             # 5. Play confirmation (reset clears the interrupt flag first)
@@ -272,11 +272,11 @@ async def run_stt_pusher(
             continue
 
         # ── Normal operation — forward transcript to main app ─────────────
-        await push_socket.send(json.dumps({
+        await push_socket.send(_json.encode({
             "type":       "transcript",
             "text":       text,
             "session_id": str(uuid.uuid4()),
-        }).encode())
+        }))
         _LOG.info("Transcript sent: %r", text[:60])
 
 
@@ -389,7 +389,7 @@ async def run_tts_subscriber(
         while True:
             try:
                 raw = await sub_socket.recv()
-                msg = json.loads(raw)
+                msg = _json.decode(raw)
             except Exception:
                 _LOG.exception("ZMQ receive error")
                 continue
@@ -411,11 +411,11 @@ async def run_tts_subscriber(
                             synth_queue.get_nowait()
                         except asyncio.QueueEmpty:
                             break
-                    await interrupt_push.send(json.dumps({
+                    await interrupt_push.send(_json.encode({
                         "type":       "interrupt",
                         "session_id": old_sid,
                         "reason":     "new_speech",
-                    }).encode())
+                    }))
 
                 player.reset()
                 session_id         = new_sid

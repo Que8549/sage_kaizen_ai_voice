@@ -50,7 +50,7 @@ AudioCapture  (src/stt/audio_capture.py)
     │  energy VAD gate → audio queue
     ▼
 Transcriber   (src/stt/transcriber.py)
-    │  faster-whisper + distil-large-v3 INT8 CPU + Silero VAD
+    │  faster-whisper + distil-large-v3.5 INT8 CPU + Silero VAD
     ▼
 Transcript  (plain text)
     │
@@ -75,17 +75,17 @@ Speakers
 
 ## Model Files (Pre-installed on E:\)
 
-### STT — faster-whisper + distil-large-v3
+### STT — faster-whisper + distil-large-v3.5
 
 | Item | Value |
 |---|---|
-| Source | distil-whisper/distil-large-v3 (HuggingFace) — converted locally to CT2 INT8 |
-| Raw download | `E:\distil-large-v3-ct2\` (Transformers format — model.safetensors) |
-| CT2 model | `E:\distil-large-v3-ct2-int8\` (CTranslate2 format — model.bin, pure INT8) |
+| Source | distil-whisper/distil-large-v3.5 (HuggingFace) |
+| Raw download | `E:\distil-large-v3.5\` (Transformers format) |
+| CT2 model | `E:\distil-large-v3.5-ct2-int8\` (CTranslate2 format — model.bin, pure INT8) |
 | Device | CPU only |
 | Quant | INT8 (direct conversion — smaller than loading FP16 and quantizing at runtime) |
 | Speed | 6.3× faster than large-v3, within 1% WER |
-| Convert cmd | `ct2-transformers-converter --model E:\distil-large-v3-ct2 --output_dir E:\distil-large-v3-ct2-int8 --quantization int8 --copy_files tokenizer.json preprocessor_config.json` |
+| Convert cmd | `ct2-transformers-converter --model E:\distil-large-v3.5 --output_dir E:\distil-large-v3.5-ct2-int8 --quantization int8 --copy_files tokenizer.json preprocessor_config.json` |
 
 ### TTS — Kokoro-82M ONNX
 
@@ -190,7 +190,7 @@ sage_kaizen_ai_voice/
 │   ├── _zmq_handlers.py         ← ZeroMQ integration (CONNECTS to main app)
 │   ├── stt/
 │   │   ├── audio_capture.py     ← PyAudio + energy VAD gate (16kHz, 30ms chunks)
-│   │   └── transcriber.py       ← faster-whisper + distil-large-v3 INT8 + Silero VAD
+│   │   └── transcriber.py       ← faster-whisper + distil-large-v3.5 INT8 + Silero VAD
 │   └── tts/
 │       ├── expression_engine.py ← intent → persona → SpeechParams
 │       ├── synthesizer.py       ← onnxruntime + misaki G2P (Kokoro-82M ONNX)
