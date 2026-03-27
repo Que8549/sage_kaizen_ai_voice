@@ -3,9 +3,9 @@
 
 models:
   stt:
-    # faster-whisper distil-large-v3, INT8 quantised, CPU only
-    # Source: Systran/faster-distil-whisper-large-v3 (HuggingFace)
-    model_dir:    "E:\\distil-large-v3-ct2-int8"
+    # faster-whisper distil-large-v3.5, INT8 quantised, CPU only
+    # Source: distil-whisper/distil-large-v3.5 (HuggingFace)
+    model_dir:    "E:\\distil-large-v3.5-ct2-int8"
     device:       "cpu"
     compute_type: "int8"
 
