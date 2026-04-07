@@ -120,9 +120,13 @@ class _SentenceBuffer:
                 break
             end = m.end()
             sentence = self._buf[:end].strip()
+            if len(sentence.split()) < 4:
+                # Too short to synthesise alone mid-stream; keep it in the
+                # buffer so it accumulates with subsequent tokens or is
+                # returned whole by flush() on turn_done.
+                break
             self._buf = self._buf[end:]
-            if len(sentence.split()) >= 4:
-                sentences.append(sentence)
+            sentences.append(sentence)
         return sentences
 
     def flush(self) -> str:
@@ -439,6 +443,12 @@ async def run_tts_subscriber(
                 if remaining:
                     _submit_synth(remaining, voice, speed, lang,
                                   session_id, synthesizer, synth_queue, loop)
+                # Clear the active session so the next session_start from any
+                # new turn is NOT mistaken for a barge-in on a completed turn.
+                # Without this, the greeting's UUID stays in session_id and
+                # every subsequent query fires a spurious barge-in, which sets
+                # barge_in_event on the main app before the first token is sent.
+                session_id = None
 
     finally:
         # Stop the collector gracefully.
