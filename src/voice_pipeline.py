@@ -202,13 +202,11 @@ class VoicePipeline:
             interrupt_push.connect(ZMQ.INTERRUPT_BUS)
             _LOG.info("Interrupt bus connected: %s", ZMQ.INTERRUPT_BUS)
 
-            # Announce readiness locally via TTS (direct, not via ZMQ token stream).
-            # drain() blocks until the audio has fully played through the speakers
-            # before sending the ready signal — ensures the greeting is heard.
-            await self.speak_text("Sage Kaizen online.", intent="chat")
-            await self._player.drain(timeout=12.0)
-
             # Signal the main app that models are loaded and voice is ready
+            # NOTE: the "Sage Kaizen online." greeting is no longer played here.
+            # The main app sends it via the ZMQ token bus once Q5, Q6, and
+            # voice are ALL confirmed ready — so the user hears it only after
+            # every component is online.
             await transcript_push.send(json.dumps({
                 "type":       "voice_ready",
                 "session_id": str(uuid.uuid4()),
