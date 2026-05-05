@@ -22,11 +22,12 @@ User rig also known as "my rig":
 | Component | Value |
 |---|---|
 | OS | Windows 11 Professional |
+| Motherboard | Gigabyte X870E AORUS XTREME AI TOP |
 | CPU | AMD Ryzen 9 9950X3D |
 | RAM | 192 GB DDR5 |
 | GPU 0 | NVIDIA RTX 5090 32 GB (Fast Brain LLM) |
 | GPU 1 | NVIDIA RTX 5080 16 GB (Architect Brain LLM) |
-| CUDA | 12.8 |
+| CUDA | 13.2.1 |
 | Storgae | 40 TB mixed SSD/HDD |
 | Python (this venv) | **3.11.x ONLY** (ctranslate2 constraint) |
 | Main Sage Kaizen Python | 3.14.3 (separate process, communicates via ZMQ) |
