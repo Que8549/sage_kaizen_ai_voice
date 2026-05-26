@@ -18,19 +18,15 @@ and text-to-speech output for the system.
 ## CURRENT HARDWARE (Authoritative)
 
 User rig also known as "my rig":
-
-| Component | Value |
-|---|---|
-| OS | Windows 11 Professional |
-| Motherboard | Gigabyte X870E AORUS XTREME AI TOP |
-| CPU | AMD Ryzen 9 9950X3D |
-| RAM | 192 GB DDR5 |
-| GPU 0 | NVIDIA RTX 5090 32 GB (Fast Brain LLM) |
-| GPU 1 | NVIDIA RTX 5080 16 GB (Architect Brain LLM) |
-| CUDA | 13.2.1 |
-| Storgae | 40 TB mixed SSD/HDD |
-| Python (this venv) | **3.11.x ONLY** (ctranslate2 constraint) |
-| Main Sage Kaizen Python | 3.14.3 (separate process, communicates via ZMQ) |
+- Motherboard: Gigabyte X870E AORUS XTREME AI TOP
+- CPU: AMD Ryzen 9 9950X3D
+- RAM: 192 GB DDR5
+- GPU0: RTX 5090 (32 GB VRAM) (Architect Brain LLM) 
+- GPU1: RTX 5090 (32 GB VRAM) (Fast Brain LLM)
+- CUDA: 13.2.1
+- Python (this venv): 3.14.3
+- Storage: 40 TB mixed SSD/HDD
+- Main Sage Kaizen Python | 3.14.3 (separate process, communicates via ZMQ) 
 
 ---
 
@@ -287,3 +283,4 @@ If a commit message says "reverted", "removed", "uninstalled", or describes a fa
 ## Related and Associated Projects
  - Integrate with Sage Kaizen local-first AI assistant (main app) located at F:\Projects\sage_kaizen_ai\
  - Sage Kaizen Voice located (voice app) at F:\Projects\sage_kaizen_ai_voice\
+ - Sage Kaizen ingest (ingest app) located at F:\Projects\sage_kaizen_ai_ingest
