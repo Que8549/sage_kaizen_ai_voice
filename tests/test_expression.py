@@ -47,15 +47,15 @@ def test_all_persona_params_valid():
         assert params.lang in ("en-us", "en-gb"), f"{persona} invalid lang"
     print("  OK all persona params valid")
 
-def test_narrator_voice_is_am_fenrir():
+def test_narrator_voice_is_am_onyx():
     p = resolve("creative")
-    assert p.voice == "am_fenrir", f"Expected am_fenrir, got {p.voice}"
-    print("  OK narrator voice = am_fenrir")
-
-def test_quick_voice_is_am_onyx():
-    p = resolve("device_control")
     assert p.voice == "am_onyx", f"Expected am_onyx, got {p.voice}"
-    print("  OK quick voice = am_onyx")
+    print("  OK narrator voice = am_onyx")
+
+def test_quick_voice_is_am_echo():
+    p = resolve("device_control")
+    assert p.voice == "am_echo", f"Expected am_echo, got {p.voice}"
+    print("  OK quick voice = am_echo")
 
 if __name__ == "__main__":
     print("\n[ Expression Engine Unit Tests ]")
@@ -65,6 +65,6 @@ if __name__ == "__main__":
     test_persona_override()
     test_text_preprocessing()
     test_all_persona_params_valid()
-    test_narrator_voice_is_am_fenrir()
-    test_quick_voice_is_am_onyx()
+    test_narrator_voice_is_am_onyx()
+    test_quick_voice_is_am_echo()
     print("\n=== All expression tests passed ===")

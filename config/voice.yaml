@@ -9,18 +9,18 @@ zmq:
   # Pi agents use 5800-5810 — no conflict
 
 tts:
-  default_voice: "am_fenrir"     # primary narrator voice
+  default_voice: "am_onyx"      # primary narrator voice (deep, resonant, gravelly)
   default_speed: 0.87            # unhurried, storyteller pacing
   default_lang:  "en-us"
   sample_rate:   24000           # Kokoro output sample rate
 
 personas:
   narrator:
-    voice: "am_fenrir"
+    voice: "am_onyx"
     speed: 0.87
     description: "Deep, warm, authoritative — long-form narration"
   mentor:
-    voice: "am_fenrir"
+    voice: "am_onyx"
     speed: 0.92
     description: "Confident guide — 6th-9th grade, research, code"
   teacher:
@@ -28,11 +28,11 @@ personas:
     speed: 0.95
     description: "Warm, clear — K-5 tutoring, step-by-step"
   chat:
-    voice: "am_fenrir"
+    voice: "am_onyx"
     speed: 1.00
     description: "Relaxed conversational"
   quick:
-    voice: "am_onyx"
+    voice: "am_echo"
     speed: 1.05
     description: "Crisp — device control, status ACKs"
 

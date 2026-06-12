@@ -433,5 +433,6 @@ class KokoroSynthesizer:
                 yield audio, sr
 
     def synth_one(self, text: str, voice: str, speed: float, lang: str = "en-us") -> tuple[np.ndarray, int]:
-        """Synthesize a single sentence chunk. Used by the ZMQ handler."""
+        """Synthesize a single sentence chunk. Used by the ZMQ handler.
+        lang param kept for API compat — Kokoro language is governed by the G2P step, not ONNX."""
         return self._synth_text(text, voice, speed)

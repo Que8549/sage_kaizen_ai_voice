@@ -16,17 +16,20 @@ and text-to-speech output for the system.
 ---
 
 ## CURRENT HARDWARE (Authoritative)
-
 User rig also known as "my rig":
 - Motherboard: Gigabyte X870E AORUS XTREME AI TOP
 - CPU: AMD Ryzen 9 9950X3D
 - RAM: 192 GB DDR5
-- GPU0: RTX 5090 (32 GB VRAM) (Architect Brain LLM) 
-- GPU1: RTX 5090 (32 GB VRAM) (Fast Brain LLM)
+- GPU0: CUDA 0 - NVIDIA GeForce RTX 5090 (32GB VRAM) — primary display GPU (3 monitors); ARCHITECT Brain + BGE-M3 embed
+- GPU1: CUDA 1 - Gigabyte GeForce RTX 5090 OC (32GB VRAM) — no display; FAST Brain + Wiki embed B + CLAP embed
+- GPU2: CUDA 2 - Gigabyte GeForce RTX 5080 (16GB VRAM) — no display; Connected by MinisForum DEG2 OCuLink eGPU Dock via USB-C (https://www.minisforum.com/products/deg2)
 - CUDA: 13.2.1
-- Python (this venv): 3.14.3
 - Storage: 40 TB mixed SSD/HDD
+- OS: Windows 11 Professional
+- Power Supply 1600W https://seasonic.com/atx3-prime-tx/ 
+- Python (this venv): 3.14.3
 - Main Sage Kaizen Python | 3.14.3 (separate process, communicates via ZMQ) 
+
 
 ---
 
@@ -58,7 +61,7 @@ ExpressionEngine  (src/tts/expression_engine.py)
 KokoroSynthesizer  (src/tts/synthesizer.py)
     │  misaki[en]          text → IPA phonemes
     │  phoneme_to_ids()    IPA chars → token IDs (Kokoro vocab)
-    │  voices/am_fenrir.bin[seq_len] → style vector (1, 256)
+    │  voices/am_onyx.bin[seq_len] → style vector (1, 256)
     │  onnxruntime.InferenceSession(model_quantized.onnx)
     │  inputs: input_ids, style, speed → output: float32 audio @ 24kHz
     ▼
@@ -106,9 +109,9 @@ E:\Kokoro-82M-v1.0-ONNX\
     model.onnx            ← optional (fp32, 311 MB)
     model_fp16.onnx       ← optional (fp16, 156 MB)
   voices\
-    am_fenrir.bin      ← narrator/mentor/chat  (REQUIRED)
+    am_onyx.bin        ← narrator/mentor/chat  (REQUIRED)
     am_michael.bin     ← teacher               (REQUIRED)
-    am_onyx.bin        ← quick/device control  (REQUIRED)
+    am_echo.bin        ← quick/device control  (REQUIRED)
     af_heart.bin       ← (and all other voices from the repo)
     ...
 ```
@@ -124,7 +127,7 @@ phonemes, _ = g2p("There are more stars than grains of sand.")
 token_ids = phoneme_to_ids(phonemes)   # max 510 IDs
 
 # 3. Load voice style vector (shape: max_tokens × 1 × 256)
-voice_array = np.fromfile("voices/am_fenrir.bin", dtype=np.float32).reshape(-1, 1, 256)
+voice_array = np.fromfile("voices/am_onyx.bin", dtype=np.float32).reshape(-1, 1, 256)
 style = voice_array[len(token_ids)]    # index by sequence length → (1, 256)
 
 # 4. Run ONNX inference (v1.0: input key is "input_ids", was "tokens" in older pack)
@@ -141,15 +144,15 @@ audio = sess.run(None, {
 ## Narrator Voice Identity — "Sage"
 
 Target: deep, resonant, warm African-American male voice.
-Default voice: `am_fenrir` (used for narrator, mentor, and chat personas).
+Default voice: `am_onyx` (used for narrator, mentor, and chat personas).
 
 | Persona | Voice | Speed | Use Case |
 |---|---|---|---|
-| **narrator** | `am_fenrir` | 0.87× | Creative, philosophy, astronomy, long-form |
-| **mentor** | `am_fenrir` | 0.92× | Tutor 6–9, research, code, architecture |
+| **narrator** | `am_onyx` | 0.87× | Creative, philosophy, astronomy, long-form |
+| **mentor** | `am_onyx` | 0.92× | Tutor 6–9, research, code, architecture |
 | **teacher** | `am_michael` | 0.95× | Tutor K–5, step-by-step explainers |
-| **chat** | `am_fenrir` | 1.00× | Conversational |
-| **quick** | `am_onyx` | 1.05× | Device control, status ACKs |
+| **chat** | `am_onyx` | 1.00× | Conversational |
+| **quick** | `am_echo` | 1.05× | Device control, status ACKs |
 
 > Authoritative source: `config/voice.yaml` — always check it before referencing voice names.
 

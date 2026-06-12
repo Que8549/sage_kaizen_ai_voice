@@ -25,6 +25,7 @@ stdout/stderr are intentionally kept clean — no shell redirection needed.
 
 import argparse
 import asyncio
+import logging
 import sys
 from pathlib import Path
 
@@ -36,13 +37,18 @@ from src.voice_pipeline import VoicePipeline
 _LOG = get_logger("sage_kaizen.voice.runner")
 
 
-async def run(persona: str | None, verbose: bool, mode: str) -> None:
+async def run(persona: str | None, verbose: bool, mode: str) -> None:  # noqa: UP007
     """Load models and run the voice pipeline in the requested mode."""
     if verbose:
-        import logging
-        get_logger("sage_kaizen.voice.pipeline").setLevel(logging.DEBUG)
-        get_logger("sage_kaizen.voice.tts.synth").setLevel(logging.DEBUG)
-        get_logger("sage_kaizen.voice.stt.transcriber").setLevel(logging.DEBUG)
+        for _name in (
+            "sage_kaizen.voice.pipeline",
+            "sage_kaizen.voice.zmq",
+            "sage_kaizen.voice.tts.synth",
+            "sage_kaizen.voice.tts.player",
+            "sage_kaizen.voice.stt.transcriber",
+            "sage_kaizen.voice.stt.capture",
+        ):
+            get_logger(_name).setLevel(logging.DEBUG)
 
     pipeline = VoicePipeline(
         mode=mode,

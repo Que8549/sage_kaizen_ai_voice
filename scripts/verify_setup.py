@@ -76,7 +76,7 @@ def main() -> int:
     print("[ Model Files on E:\\ ]")
     from src.config import PATHS
     model_checks = [
-        (PATHS.STT_MODEL_DIR,  "STT: distil-large-v3-ct2-int8 directory (CTranslate2 INT8 format)"),
+        (PATHS.STT_MODEL_DIR,  "STT: distil-large-v3.5-ct2-int8 directory (CTranslate2 INT8 format)"),
         (PATHS.TTS_ONNX_MODEL, "TTS: model_quantized.onnx (Kokoro-82M-v1.0-ONNX)"),
         (PATHS.TTS_VOICES_DIR, "TTS: voices directory"),
     ]

@@ -34,12 +34,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class PATHS:
-    # ── STT — faster-whisper distil-large-v3 (INT8, CPU) ──────
-    # CTranslate2 INT8 format — converted from distil-whisper/distil-large-v3
-    # Run: ct2-transformers-converter --model E:\distil-large-v3-ct2
-    #      --output_dir E:\distil-large-v3-ct2-int8 --quantization int8
+    # ── STT — faster-whisper distil-large-v3.5 (INT8, CPU) ────
+    # CTranslate2 INT8 format — converted from distil-whisper/distil-large-v3.5
+    # Run: ct2-transformers-converter --model E:\distil-large-v3.5
+    #      --output_dir E:\distil-large-v3.5-ct2-int8 --quantization int8
     #      --copy_files tokenizer.json preprocessor_config.json
-    STT_MODEL_DIR = Path(r"E:\distil-large-v3-ct2-int8").resolve()
+    STT_MODEL_DIR = Path(r"E:\distil-large-v3.5-ct2-int8").resolve()
 
     # ── TTS — Kokoro-82M ONNX (onnx-community/Kokoro-82M-ONNX) ──
     #

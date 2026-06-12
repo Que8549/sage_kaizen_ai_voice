@@ -30,7 +30,7 @@ Integrated:
 from __future__ import annotations
 
 import asyncio
-import json
+import msgspec.json as _json
 import uuid
 from typing import Callable, Optional
 
@@ -207,10 +207,10 @@ class VoicePipeline:
             # The main app sends it via the ZMQ token bus once Q5, Q6, and
             # voice are ALL confirmed ready — so the user hears it only after
             # every component is online.
-            await transcript_push.send(json.dumps({
+            await transcript_push.send(_json.encode({
                 "type":       "voice_ready",
                 "session_id": str(uuid.uuid4()),
-            }).encode())
+            }))
             _LOG.info("Voice ready signal sent to main app")
 
             self._capture.start()

@@ -65,7 +65,11 @@ class AudioPlayer:
         self.interrupt()
         if self._task:
             await self._queue.put(None)          # sentinel to exit loop
-            await asyncio.wait_for(self._task, timeout=3.0)
+            try:
+                await asyncio.wait_for(self._task, timeout=3.0)
+            except asyncio.TimeoutError:
+                _LOG.warning("AudioPlayer: play loop did not stop within 3 s; cancelling")
+                self._task.cancel()
         _LOG.info("AudioPlayer stopped")
 
     def enqueue(self, samples: np.ndarray, sr: int) -> None:
