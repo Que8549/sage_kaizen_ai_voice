@@ -52,10 +52,13 @@ phonemizer-fork==3.3.2
 preshed==3.0.13
 protobuf==7.34.1
 psutil==7.2.2
+psycopg==3.3.2
+psycopg-binary==3.3.2
 PyAudio==0.2.14
 pycparser==3.0
 pydantic==2.12.5
 pydantic_core==2.41.5
+pydantic-settings==2.13.0
 Pygments==2.19.2
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
