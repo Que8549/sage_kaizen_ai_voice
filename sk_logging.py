@@ -12,17 +12,22 @@ Properties
 ----------
 - Level        : INFO
 - propagate    : False — messages never bubble to the root logger
-- stdout/stderr: NOT attached — all output goes to the rotating file (and,
-                 best-effort, Postgres) only
-- Handler      : single RotatingFileHandler shared across all loggers
-                 Max 5 MB per file · 5 backups (sage_kaizen_voice.log.1 … .5)
-                 plus a buffered, non-blocking PostgresLogHandler mirroring
-                 rows into log.sage_kaizen_voice (see main project's
-                 log/db/log_schema.sql) — best-effort, never a hard
-                 dependency; degrades silently to file-only if psycopg, the
-                 DSN, or the schema/tables are unavailable. This is this
-                 project's first-ever Postgres touchpoint (2026-07-16); see
-                 the new pg_settings.py.
+- stdout/stderr: NOT attached, ever
+- Handler      : buffered, non-blocking PostgresLogHandler mirroring rows
+                 into log.sage_kaizen_voice (see main project's
+                 log/db/log_schema.sql) — best-effort (degrades to a silent
+                 drop if psycopg, the DSN, or the schema/tables are
+                 unavailable) — PLUS a small RotatingFileHandler
+                 (sage_kaizen_voice.log, 1 MB x 2 backups) re-added
+                 2026-07-16 as a crash-safety net: PostgresLogHandler batches
+                 records in memory for up to ~2s/200 records before they
+                 reach Postgres, and a hard crash (e.g. a BSOD) gives no
+                 chance to flush that buffer. This file writes synchronously
+                 per log call, independent of the DB batching, so a crash
+                 can't lose the data — reconciling it back into Postgres
+                 after a real incident is a manual step, not automatic.
+                 Deliberately small: its job is to bridge a crash window, not
+                 to be a second permanent archive.
 - Encoding     : UTF-8
 - Format       : %(asctime)s | %(levelname)s | %(name)s | %(message)s
 - Date format  : %Y-%m-%d %H:%M:%S
@@ -39,9 +44,7 @@ Project root resolution
 Hard invariants
 ---------------
 - get_logger() is idempotent: safe to call at module import time.
-- All log directories are created automatically on first call.
-- Never writes to stdout or stderr (the Postgres handler's own internal
-  down/recovered diagnostics go to a dedicated rotating file, never stdout).
+- Never writes to stdout or stderr (only ever a file, and Postgres).
 - Never uses shell redirection.
 """
 
@@ -59,12 +62,17 @@ from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-# ── Format ──────────────────────────────────────────────────────────────────
+# ── Format ────────────────────────────────────────────────────────────────── #
 _FORMAT       = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 _DATE_FMT     = "%Y-%m-%d %H:%M:%S"
-_MAX_BYTES    = 5 * 1024 * 1024  # 5 MB per file
-_BACKUP_CNT   = 5                # keeps .log.1 … .log.5
 _FALLBACK_REL = "logs/sage_kaizen_voice.log"  # used when paths.yaml is absent
+
+# Crash-safety fallback file sizing (re-added 2026-07-16, same day as the
+# DB-only change) — deliberately small: this file's job is to bridge a crash
+# window (PostgresLogHandler's in-memory batching), not to be a second
+# permanent archive alongside Postgres.
+FALLBACK_MAX_BYTES = 1 * 1024 * 1024  # 1 MB
+FALLBACK_BACKUP_CNT = 2
 
 # ── Process-level run_id correlation (2026-07-16) ────────────────────────────
 # Every LogRecord in this process gets a run_id stamped via a global record
@@ -118,7 +126,9 @@ def _resolve_log_file(root: Path) -> Path:
     return (root / rel).resolve()
 
 
-# ── Shared handler (module-level singleton, double-checked locking) ──────────
+# ── Shared fallback file handler (module-level singleton, double-checked
+# locking) — re-added 2026-07-16 as a crash-safety net alongside
+# PostgresLogHandler below; see the module docstring for why. ────────────────
 
 _handler: RotatingFileHandler | None = None
 _handler_lock = threading.Lock()
@@ -140,8 +150,8 @@ def _get_handler() -> RotatingFileHandler:
         log_file.parent.mkdir(parents=True, exist_ok=True)
         h = RotatingFileHandler(
             log_file,
-            maxBytes=_MAX_BYTES,
-            backupCount=_BACKUP_CNT,
+            maxBytes=FALLBACK_MAX_BYTES,
+            backupCount=FALLBACK_BACKUP_CNT,
             encoding="utf-8",
         )
         h.setFormatter(logging.Formatter(_FORMAT, datefmt=_DATE_FMT))
@@ -386,8 +396,8 @@ def get_logger(name: str) -> logging.Logger:
     Returns
     -------
     logging.Logger
-        Level INFO, propagate=False, one RotatingFileHandler plus (best-effort)
-        one buffered PostgresLogHandler.
+        Level INFO, propagate=False, one small RotatingFileHandler (crash
+        safety net) plus one (best-effort) buffered PostgresLogHandler.
     """
     logger = logging.getLogger(name)
     if logger.handlers:

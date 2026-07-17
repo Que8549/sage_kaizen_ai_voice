@@ -180,7 +180,8 @@ sage_kaizen_ai_voice/
 ├── README.md
 ├── requirements.txt             ← pip install -r requirements.txt
 ├── pyproject.toml
-├── sk_logging.py                ← Centralized rotating log configuration
+├── sk_logging.py                ← Centralized logging — mirrors into Postgres log.sage_kaizen_voice plus a small (1MB×2) crash-safety rotating file (2026-07-16); see main project's CLAUDE.md §12
+├── pg_settings.py               ← PostgreSQL DSN (added 2026-07-16 — this project's first-ever Postgres touchpoint, for the above)
 ├── config/
 │   ├── paths.yaml               ← E:\ model paths (authoritative — never hardcode paths)
 │   └── voice.yaml               ← ZMQ addrs, persona/voice assignments (authoritative)
