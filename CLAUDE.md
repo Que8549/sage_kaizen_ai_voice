@@ -17,7 +17,7 @@ and text-to-speech output for the system.
 
 ## CURRENT HARDWARE (Authoritative)
 User rig also known as "my rig":
-- Motherboard: Gigabyte X870E AORUS XTREME AI TOP
+- Motherboard: Gigabyte X870E AORUS XTREME AI TOP AMD AM5 eATX Motherboard
 - CPU: AMD Ryzen 9 9950X3D
 - RAM: 192 GB DDR5
 - GPU0: CUDA 0 - NVIDIA GeForce RTX 5090 (32GB VRAM) — primary display GPU (3 monitors); ARCHITECT Brain + BGE-M3 embed
